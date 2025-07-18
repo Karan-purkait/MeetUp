@@ -40,30 +40,31 @@ export default function Authentication() {
     const { handleRegister, handleLogin } = React.useContext(AuthContext);
 
     let handleAuth = async () => {
-        try {
-            if (formState === 0) {
-
-                let result = await handleLogin(username, password)
-
-
-            }
-            if (formState === 1) {
-                let result = await handleRegister(name, username, password);
-                console.log(result);
-                setUsername("");
-                setMessage(result);
-                setOpen(true);
-                setError("")
-                setFormState(0)
-                setPassword("")
-            }
-        } catch (err) {
-
-            console.log(err);
-            let message = (err.response.data.message);
-            setError(message);
+    try {
+        if (formState === 0) {
+            let result = await handleLogin(username, password);
+            // probably should also handle login result here
         }
+
+        if (formState === 1) {
+            let result = await handleRegister(name, username, password);
+            console.log(result);
+            setUsername("");
+            setMessage(result);
+            setOpen(true);
+            setError("");
+            setFormState(0);
+            setPassword("");
+        }
+    } catch (err) {
+        console.log(err);
+        
+        // ✅ SAFELY access error message
+        let message = err?.response?.data?.message || "Something went wrong. Please try again.";
+        setError(message);
     }
+};
+
 
 
     return (
