@@ -1,9 +1,4 @@
-Got it 🚀 Since *MeetUp* is your project (a Zoom-type website), your README should look professional, engaging, and developer-friendly — with clear explanation, screenshots, and contribution details. Here’s a **fantastic GitHub README.md** template for your project:
-
----
-
-````markdown
-# 🎥 MeetUp – A Zoom-like Video Conferencing Platform  
+# 🎥 MeetUp – A Real time Video Conferencing Platform  
 
 MeetUp is a **real-time video conferencing website** built to connect people seamlessly, just like Zoom. With features like secure rooms, screen sharing, and chat integration, MeetUp provides an easy-to-use and scalable solution for virtual meetings, classrooms, and team collaborations.  
 
@@ -62,15 +57,7 @@ npm start
 
 ### 4️⃣ Open in browser
 
-Visit: `http://localhost:3000/`
-
----
-
-## 📸 Screenshots
-
-| Home Page                | Meeting Room             | Chat Feature             |
-| ------------------------ | ------------------------ | ------------------------ |
-| ![Home](assets/home.png) | ![Room](assets/room.png) | ![Chat](assets/chat.png) |
+Visit: `https://meet-up-zeta-two.vercel.app/`
 
 ---
 
@@ -99,8 +86,8 @@ Contributions are always welcome!
 
 👤 **Karan Purkait**
 
-* GitHub: [@KaranPurkait](https://github.com/KaranPurkait)
-* LinkedIn: [Karan Purkait](https://linkedin.com/in/your-profile)
+* GitHub: [@KaranPurkait](https://github.com/Karan-purkait/)
+* LinkedIn: [Karan Purkait](https://linkedin.com/in/karan-purkait/)
 
 ---
 
@@ -108,11 +95,3 @@ Contributions are always welcome!
 
 If you like this project, **give it a star ⭐** on GitHub and share it with others!
 
-```
-
----
-
-⚡ Suggestion: If you share your **exact tech stack (React/Next.js/Vanilla JS, etc.)** I can fine-tune the README even more so it perfectly matches your implementation.  
-
-Do you want me to also make a **fancy logo + banner image** for the top of your README (like professional open-source projects)?
-```
