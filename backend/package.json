@@ -4,20 +4,17 @@
   "type": "module",
   "main": "src/app.js",
   "scripts": {
-    "start": "node src/app.js",
-    "dev": "nodemon src/app.js"
+    "start": "node src/app.js"
   },
   "dependencies": {
-    "bcryptjs": "^3.0.3",
+    "express": "^4.19.0",
     "cors": "^2.8.5",
-    "crypto": "^1.0.1",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "http-status": "^1.7.3",
-    "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.0",
-    "socket.io": "^4.7.2"
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.0",
+    "socket.io": "^4.7.0"
   },
+
   "devDependencies": {
     "nodemon": "^3.0.2"
   }
