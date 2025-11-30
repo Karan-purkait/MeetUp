@@ -1,17 +1,17 @@
-// backend/src/routes/users.routes.js
+// src/routes/users.routes.js
 import { Router } from "express";
 import {
   addToHistory,
   getUserHistory,
   login,
-  register,
+  register
 } from "../controllers/user.controller.js";
 
 const router = Router();
 
-router.post("/register", register);
-router.post("/login", login);
-router.post("/add_to_activity", addToHistory);
-router.get("/get_all_activity", getUserHistory);
+router.post("/auth/login", login);
+router.post("/auth/register", register);
+router.post("/history", addToHistory);
+router.get("/history/:userId", getUserHistory);
 
 export default router;
