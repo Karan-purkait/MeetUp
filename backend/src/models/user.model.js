@@ -1,14 +1,36 @@
-import mongoose, { Schema } from "mongoose";
+// backend/src/models/user.model.js
+import mongoose from 'mongoose';
 
-const userScheme = new Schema(
-    {
-        name: { type: String, required: true },
-        username: { type: String, required: true, unique: true },
-        password: { type: String, required: true },
-        token: { type: String }
-    }
-)
+const { Schema } = mongoose;
 
-const User = mongoose.model("User", userScheme);
+// Define the user schema
+const userSchema = new Schema(
+  {
+    name: {
+      type: String,
+      trim: true,
+      required: true,
+    },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+    password: {
+      type: String,
+      required: true,
+    },
+  },
+  {
+    timestamps: true, // ✅ adds createdAt and updatedAt
+  }
+);
 
-export { User };
+// OPTIONAL: ensure indexes are built (useful in dev/tests)
+userSchema.index({ email: 1 }, { unique: true });
+
+// Compile the model
+const User = mongoose.model('User', userSchema);
+export default User;
