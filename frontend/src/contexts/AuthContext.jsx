@@ -1,4 +1,3 @@
-// frontend/src/contexts/AuthContext.jsx
 import axios from "axios";
 import httpStatus from "http-status";
 import { createContext, useContext, useState } from "react";
@@ -16,22 +15,18 @@ export const AuthProvider = ({ children }) => {
   const [userData, setUserData] = useState(null);
   const router = useNavigate();
 
-  // ✅ FIXED: username → email
   const handleRegister = async (name, email, password) => {
     try {
-      console.log("Backend URL:", `${server}/api/v1/users`);
       console.log("Register payload:", { name, email, password });
 
-      const request = await client.post("/register", {
+      const request = await client.post("/auth/register", {
         name,
-        email,        // ✅ CHANGED: username → email
+        email,
         password,
       });
 
-      console.log("Register response:", request.data);
-
       if (request.status === httpStatus.CREATED) {
-        return request.data.message;
+        return "Registration successful! Please login.";
       }
     } catch (err) {
       console.error("Register error:", err.response?.data || err.message);
@@ -39,21 +34,20 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ FIXED: username → email
   const handleLogin = async (email, password) => {
     try {
-      console.log("Backend URL:", `${server}/api/v1/users`);
       console.log("Login payload:", { email, password });
 
-      const request = await client.post("/login", {
-        email,        // ✅ CHANGED: username → email
+      const request = await client.post("/auth/login", {
+        email,
         password,
       });
 
-      console.log("Login response:", request.data);
-
       if (request.status === httpStatus.OK) {
         localStorage.setItem("token", request.data.token);
+        localStorage.setItem("userName", request.data.user.name);  // ✅ NEW
+        localStorage.setItem("userId", request.data.user.id);      // ✅ NEW
+        setUserData(request.data.user);
         router("/home");
       }
     } catch (err) {
@@ -62,26 +56,40 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // ✅ FIXED: Proper token-based history retrieval
   const getHistoryOfUser = async () => {
     try {
-      const request = await client.get("/get_all_activity", {
-        params: {
-          token: localStorage.getItem("token"),
-        },
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.warn("No token found");
+        return [];
+      }
+
+      const request = await client.get("/history", {
+        params: { token },
       });
-      return request.data;
+
+      return request.data.data || [];
     } catch (err) {
       console.error("Get history error:", err);
-      throw err;
+      return [];
     }
   };
 
-  const addToUserHistory = async (meetingCode) => {
+  // ✅ FIXED: Proper history addition with token
+  const addToUserHistory = async (roomId) => {
     try {
-      const request = await client.post("/add_to_activity", {
-        token: localStorage.getItem("token"),
-        meeting_code: meetingCode,
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.warn("No token found");
+        return null;
+      }
+
+      const request = await client.post("/history", {
+        token,
+        roomId,
       });
+
       return request.data;
     } catch (err) {
       console.error("Add to history error:", err);

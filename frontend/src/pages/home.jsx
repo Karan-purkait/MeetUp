@@ -1,13 +1,10 @@
-// frontend/src/pages/home.jsx
 import React, { useContext, useState } from 'react'
 import withAuth from '../utils/withAuth'
 import { useNavigate } from 'react-router-dom'
-import "../App.css";
 import {
   Box,
-  Button, 
-  IconButton, 
-  TextField, 
+  Button,
+  TextField,
   Alert,
   Typography,
   Paper,
@@ -17,10 +14,8 @@ import {
   Chip,
   Fade,
   CircularProgress,
-  useTheme,
 } from '@mui/material';
 import RestoreIcon from '@mui/icons-material/Restore';
-import HistoryIcon from '@mui/icons-material/History';
 import LogoutIcon from '@mui/icons-material/Logout';
 import VideoCallIcon from '@mui/icons-material/VideoCall';
 import { AuthContext } from '../contexts/AuthContext';
@@ -38,7 +33,6 @@ function HomeComponent() {
   const [meetingCode, setMeetingCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const muiTheme = useTheme();
 
   const { addToUserHistory } = useContext(AuthContext);
 
@@ -53,7 +47,7 @@ function HomeComponent() {
 
     try {
       console.log("Joining meeting with code:", meetingCode);
-      
+
       try {
         await addToUserHistory(meetingCode);
         console.log("Added to history");
@@ -85,7 +79,6 @@ function HomeComponent() {
           '100%': { backgroundPosition: '0% 50%' },
         }
       }}>
-        {/* Background Bubbles */}
         <Box sx={{
           position: 'absolute',
           top: '-50%',
@@ -109,7 +102,6 @@ function HomeComponent() {
           animation: 'float 8s ease-in-out infinite reverse',
         }} />
 
-        {/* Navbar */}
         <Paper elevation={0} sx={{
           position: 'fixed',
           top: 0,
@@ -127,7 +119,7 @@ function HomeComponent() {
               <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)', width: 40, height: 40 }}>
                 <VideoCallIcon />
               </Avatar>
-              <Typography variant="h5" sx={{ 
+              <Typography variant="h5" sx={{
                 fontWeight: 800,
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 backgroundClip: 'text',
@@ -156,6 +148,8 @@ function HomeComponent() {
                 startIcon={<LogoutIcon />}
                 onClick={() => {
                   localStorage.removeItem("token")
+                  localStorage.removeItem("userName")
+                  localStorage.removeItem("userId")
                   navigate("/auth")
                 }}
                 sx={{
@@ -179,7 +173,6 @@ function HomeComponent() {
 
         <Container maxWidth="lg" sx={{ pt: 12, pb: 8, position: 'relative', zIndex: 1 }}>
           <Box sx={{ display: 'flex', flexDirection: { xs: 'column', lg: 'row' }, gap: 6, alignItems: 'center', mt: 4 }}>
-            {/* Left Panel */}
             <Box sx={{ flex: 1, textAlign: { xs: 'center', lg: 'left' } }}>
               <Fade in timeout={800}>
                 <Typography variant="h1" sx={{
@@ -192,9 +185,7 @@ function HomeComponent() {
                   lineHeight: 1.1,
                   mb: 3,
                 }}>
-                  Premium Video 
-                  <br />
-                  Meetings
+                  Premium Video<br />Meetings
                 </Typography>
               </Fade>
 
@@ -227,12 +218,12 @@ function HomeComponent() {
                 )}
 
                 <Box sx={{ display: 'flex', gap: 2 }}>
-                  <TextField 
+                  <TextField
                     fullWidth
-                    onChange={e => setMeetingCode(e.target.value)} 
+                    onChange={e => setMeetingCode(e.target.value)}
                     value={meetingCode}
-                    label="Enter Meeting Code" 
-                    variant="outlined" 
+                    label="Enter Meeting Code"
+                    variant="outlined"
                     placeholder="e.g., abc123"
                     sx={{
                       '& .MuiOutlinedInput-root': {
@@ -244,8 +235,8 @@ function HomeComponent() {
                       }
                     }}
                   />
-                  <Button 
-                    onClick={handleJoinVideoCall} 
+                  <Button
+                    onClick={handleJoinVideoCall}
                     variant='contained'
                     disabled={loading || !meetingCode.trim()}
                     sx={{
@@ -279,8 +270,7 @@ function HomeComponent() {
               </Paper>
             </Box>
 
-            {/* Right Panel */}
-            <Box sx={{ flex: 1, display: { xs: 'none', lg: 'flex' }, justifyContent: 'center', alignItems: 'center' }}>
+            <Box sx={{ flex: 1, display: { xs: 'none', lg: 'flex' }, justifyContent: 'center' }}>
               <Card sx={{
                 width: 400,
                 height: 400,

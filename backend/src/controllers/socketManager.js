@@ -1,111 +1,108 @@
 // backend/src/controllers/socketManager.js
 import { Server } from "socket.io";
 
-let connections = {};
-let messages = {};
-let timeOnline = {};
-
 export const connectToSocket = (server) => {
   const io = new Server(server, {
     cors: {
-      origin: "*", // or ['http://localhost:3000'] when you know the frontend URL
+      origin: ["http://localhost:3000"],
       methods: ["GET", "POST"],
-      allowedHeaders: ["*"],
       credentials: true,
     },
   });
 
-  io.on("connection", (socket) => {
-    console.log("Socket connected:", socket.id);
+  // roomId -> Set<socketId>
+  const roomSockets = new Map();
+  // socketId -> { roomId, name }
+  const socketInfo = new Map();
 
-    socket.on("join-call", (roomId) => {
+  io.on("connection", (socket) => {
+    console.log("🔌 Socket connected:", socket.id);
+
+    // -------------------------------------------------
+    // JOIN CALL
+    // -------------------------------------------------
+    socket.on("join-call", (roomId, name) => {
       if (!roomId) return;
 
-      if (!connections[roomId]) {
-        connections[roomId] = [];
-      }
-      connections[roomId].push(socket.id);
+      const displayName = name || "Guest";
+      socketInfo.set(socket.id, { roomId, name: displayName });
 
-      timeOnline[socket.id] = new Date();
+      if (!roomSockets.has(roomId)) roomSockets.set(roomId, new Set());
+      roomSockets.get(roomId).add(socket.id);
 
-      // notify existing users in the room
-      connections[roomId].forEach((clientId) => {
-        io.to(clientId).emit("user-joined", socket.id, connections[roomId]);
-      });
+      socket.join(roomId);
 
-      // send existing messages to the new user
-      if (messages[roomId]) {
-        messages[roomId].forEach((msg) => {
-          io.to(socket.id).emit(
-            "chat-message",
-            msg.data,
-            msg.sender,
-            msg["socket-id-sender"]
-          );
-        });
-      }
-    });
+      const clients = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
 
-    socket.on("signal", (toId, message) => {
-      if (!toId) return;
-      io.to(toId).emit("signal", socket.id, message);
-    });
-
-    socket.on("chat-message", (data, sender) => {
-      // find room containing this socket
-      const [matchingRoom, found] = Object.entries(connections).reduce(
-        ([room, isFound], [roomKey, roomValue]) => {
-          if (!isFound && roomValue.includes(socket.id)) {
-            return [roomKey, true];
-          }
-          return [room, isFound];
-        },
-        ["", false]
+      console.log(
+        `👤 ${displayName} joined ${roomId} | Users: ${clients.length}`
       );
 
-      if (!found) return;
+      // Notify others
+      socket.to(roomId).emit("user-joined", socket.id, clients, displayName);
 
-      if (!messages[matchingRoom]) {
-        messages[matchingRoom] = [];
-      }
-
-      messages[matchingRoom].push({
-        sender,
-        data,
-        "socket-id-sender": socket.id,
-      });
-
-      connections[matchingRoom].forEach((clientId) => {
-        io.to(clientId).emit("chat-message", data, sender, socket.id);
-      });
+      // Also tell the new user
+      socket.emit("user-joined", socket.id, clients, displayName);
     });
 
+    // -------------------------------------------------
+    // WEBRTC SIGNAL
+    // -------------------------------------------------
+    socket.on("signal", (toId, message, senderName) => {
+      if (!toId) return;
+      io.to(toId).emit("signal", socket.id, message, senderName);
+    });
+
+    // -------------------------------------------------
+    // CHAT MESSAGE – (FIXED: no double messages)
+    // -------------------------------------------------
+    socket.on("chat-message", (message, sender, senderSocketId) => {
+      const info = socketInfo.get(socket.id);
+      if (!info) return;
+
+      const { roomId } = info;
+
+      const msgData = {
+        sender,
+        data: message,
+        timestamp: new Date().toLocaleTimeString(),
+        socketId: senderSocketId,
+      };
+
+      console.log(`💬 [${roomId}] ${sender}: ${message}`);
+
+      // Send to everyone **including sender**
+      io.to(roomId).emit("chat-message", msgData);
+    });
+
+    // -------------------------------------------------
+    // DISCONNECT
+    // -------------------------------------------------
     socket.on("disconnect", () => {
-      const startTime = timeOnline[socket.id];
-      if (startTime) {
-        const diffTime = Math.abs(startTime - new Date());
-        console.log(`Socket ${socket.id} online for ${diffTime} ms`);
-        delete timeOnline[socket.id];
+      const info = socketInfo.get(socket.id);
+
+      if (!info) {
+        console.log("❌ Disconnected without room:", socket.id);
+        return;
       }
 
-      // remove from any room and notify others
-      for (const [roomId, clientIds] of Object.entries(connections)) {
-        if (clientIds.includes(socket.id)) {
-          clientIds.forEach((clientId) => {
-            io.to(clientId).emit("user-left", socket.id);
-          });
+      const { roomId, name } = info;
+      socketInfo.delete(socket.id);
 
-          connections[roomId] = clientIds.filter(
-            (clientId) => clientId !== socket.id
-          );
+      if (roomSockets.has(roomId)) {
+        const set = roomSockets.get(roomId);
+        set.delete(socket.id);
 
-          if (connections[roomId].length === 0) {
-            delete connections[roomId];
-          }
+        if (set.size === 0) {
+          roomSockets.delete(roomId);
+          console.log(`🗑️ Room deleted: ${roomId}`);
+        } else {
+          socket.to(roomId).emit("user-left", socket.id);
+          console.log(`👋 ${name} left | Remaining: ${set.size}`);
         }
       }
     });
   });
 
-  return io;
+  console.log("✅ Socket.IO initialized");
 };
