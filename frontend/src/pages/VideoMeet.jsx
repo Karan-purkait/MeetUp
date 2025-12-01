@@ -45,6 +45,7 @@ const peerConfigConnections = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
+    // NOTE: for production TURN server is recommended for NAT/firewall issues.
   ],
 };
 
@@ -95,36 +96,69 @@ export default function VideoMeet() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // check camera/mic/screen
+  // ---------------------------
+  // Device availability check
+  // Avoid prompting user multiple times. Use enumerateDevices.
+  // ---------------------------
   useEffect(() => {
-    const check = async () => {
+    const checkDevices = async () => {
       try {
-        try {
-          const s = await navigator.mediaDevices.getUserMedia({ video: true });
-          s.getTracks().forEach(t => t.stop());
-          setVideoAvailable(true);
-        } catch {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
           setVideoAvailable(false);
-        }
-        try {
-          const s = await navigator.mediaDevices.getUserMedia({ audio: true });
-          s.getTracks().forEach(t => t.stop());
-          setAudioAvailable(true);
-        } catch {
           setAudioAvailable(false);
+          setScreenAvailable(false);
+          return;
         }
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const hasVideo = devices.some(d => d.kind === 'videoinput');
+        const hasAudio = devices.some(d => d.kind === 'audioinput');
+        setVideoAvailable(hasVideo);
+        setAudioAvailable(hasAudio);
         setScreenAvailable(!!navigator.mediaDevices.getDisplayMedia);
       } catch (e) {
         console.error('device check error', e);
+        setVideoAvailable(false);
+        setAudioAvailable(false);
+        setScreenAvailable(false);
       }
     };
-    check();
+    checkDevices();
   }, []);
 
-  // Helper: safely set video element for a socketId
+  // Helper: safely set video element for a socketId and configure playback
   const setVideoRef = (socketId, el) => {
-    if (el) videoRefs.current[socketId] = el;
-    else delete videoRefs.current[socketId];
+    if (el) {
+      // configure element for autoplay & inline play (mobile)
+      try {
+        el.autoplay = true;
+        el.playsInline = true;
+        el.controls = false;
+
+        // remote streams should NOT be muted; local preview is muted elsewhere
+        if (videoRefs.current[socketId] !== el) {
+          // if replacing element, try to attach existing stream
+          const existing = videos.find(v => v.socketId === socketId);
+          if (existing && existing.stream) {
+            if (el.srcObject !== existing.stream) {
+              el.srcObject = existing.stream;
+              // attempt to play (some browsers require user gesture; join button is a gesture)
+              el.play().catch(() => {});
+            }
+          }
+        }
+      } catch (e) {
+        // ignore DOM property errors
+      }
+      videoRefs.current[socketId] = el;
+    } else {
+      // removed
+      if (videoRefs.current[socketId] && videoRefs.current[socketId].srcObject) {
+        try {
+          videoRefs.current[socketId].srcObject = null;
+        } catch (e) {}
+      }
+      delete videoRefs.current[socketId];
+    }
   };
 
   // Attach streams to DOM videos whenever "videos" state changes
@@ -133,6 +167,10 @@ export default function VideoMeet() {
       const el = videoRefs.current[v.socketId];
       if (el && v.stream && el.srcObject !== v.stream) {
         el.srcObject = v.stream;
+        // explicit play to handle mobile autoplay policies
+        el.play().catch(() => {
+          // play may fail if browser requires user interaction. Join click should suffice.
+        });
       }
     });
   }, [videos]);
@@ -143,8 +181,13 @@ export default function VideoMeet() {
     const senders = pc.getSenders ? pc.getSenders() : [];
     window.localStream.getTracks().forEach(track => {
       const already = senders.find(s => s.track && s.track.kind === track.kind);
-      if (!already) pc.addTrack(track, window.localStream);
-      else {
+      if (!already) {
+        try {
+          pc.addTrack(track, window.localStream);
+        } catch (e) {
+          // ignore
+        }
+      } else {
         try {
           already.replaceTrack && already.replaceTrack(track);
         } catch (e) {
@@ -162,7 +205,11 @@ export default function VideoMeet() {
       stream.getTracks().forEach(track => {
         const sender = senders.find(s => s.track && s.track.kind === track.kind);
         if (sender && sender.replaceTrack) {
-          sender.replaceTrack(track);
+          try {
+            sender.replaceTrack(track);
+          } catch (e) {
+            // ignore
+          }
         } else {
           try {
             pc.addTrack(track, stream);
@@ -174,9 +221,12 @@ export default function VideoMeet() {
     });
   };
 
-  // Media helpers
+  // ---------------------------
+  // getUserMedia — improved constraints & error handling
+  // ---------------------------
   const getUserMedia = async (videoEnabled, audioEnabled) => {
     try {
+      // stop previous if disabling both
       if (!videoEnabled && !audioEnabled) {
         if (localVideoRef.current?.srcObject) {
           localVideoRef.current.srcObject.getTracks().forEach(t => t.stop());
@@ -186,29 +236,63 @@ export default function VideoMeet() {
         return;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: videoEnabled,
-        audio: audioEnabled,
-      });
+      const constraints = {
+        video: videoEnabled ? { facingMode: 'user' } : false,
+        audio: audioEnabled
+          ? { echoCancellation: true, noiseSuppression: true }
+          : false,
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      // stop any old stream tracks (we will replace)
+      if (window.localStream) {
+        try {
+          window.localStream.getTracks().forEach(t => {
+            // avoid stopping if it's the same track object
+            if (!stream.getTracks().some(nt => nt.id === t.id)) t.stop();
+          });
+        } catch (e) {}
+      }
 
       window.localStream = stream;
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+        // local preview must be muted to prevent echo
+        try {
+          localVideoRef.current.muted = true;
+          localVideoRef.current.autoplay = true;
+          localVideoRef.current.playsInline = true;
+          localVideoRef.current.play().catch(() => {});
+        } catch (e) {}
+      }
 
       replaceTracksInConnections(stream);
     } catch (e) {
       console.error('getUserMedia error', e);
 
+      // handle permission / device busy errors gracefully
       if (e.name === 'NotReadableError' || e.name === 'NotAllowedError') {
-        alert('Camera is busy or blocked. Joining without video.');
+        alert('Camera or microphone is busy or blocked. Joining with available devices only.');
+        // try audio-only fallback
         try {
           const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
           window.localStream = audioStream;
-          if (localVideoRef.current) localVideoRef.current.srcObject = audioStream;
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = audioStream;
+            localVideoRef.current.muted = true;
+            localVideoRef.current.autoplay = true;
+            localVideoRef.current.playsInline = true;
+            localVideoRef.current.play().catch(() => {});
+          }
           replaceTracksInConnections(audioStream);
+          setVideo(false);
+          setAudio(true);
         } catch (err) {
-          console.error('Audio only getUserMedia error', err);
+          console.error('Audio only fallback failed', err);
+          setVideo(false);
+          setAudio(false);
         }
-        setVideo(false);
       }
     }
   };
@@ -225,13 +309,16 @@ export default function VideoMeet() {
         audioTracks.forEach(t => screenStream.addTrack(t));
       }
 
-      // stop previous local tracks (but keep them if we want to reuse?)
+      // stop previous local tracks
       if (window.localStream) {
         window.localStream.getTracks().forEach(t => t.stop());
       }
 
       window.localStream = screenStream;
-      if (localVideoRef.current) localVideoRef.current.srcObject = screenStream;
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = screenStream;
+        try { localVideoRef.current.muted = true; localVideoRef.current.play().catch(()=>{}); } catch(e){}
+      }
 
       replaceTracksInConnections(screenStream);
 
@@ -294,14 +381,12 @@ export default function VideoMeet() {
   const handleSignal = useCallback(
     async (fromId, message, senderName) => {
       try {
-        // store remote name
         if (senderName) remoteNamesRef.current[fromId] = senderName;
 
         const signal = typeof message === 'string' ? JSON.parse(message) : message;
 
         let pc = connectionsRef.current[fromId];
         if (!pc) {
-          // create a pc for this remote peer (we didn't have one yet)
           pc = createPeerConnection(fromId, senderName || 'Guest');
         }
 
@@ -354,7 +439,6 @@ export default function VideoMeet() {
     socketRef.current.on('user-joined', (userId, senderName) => {
       try {
         if (userId === socketIdRef.current) return; // ignore our own event
-        // create pc and make an offer to the new user
         if (connectionsRef.current[userId]) return;
         const pc = createPeerConnection(userId, senderName || 'Guest');
 
@@ -428,11 +512,12 @@ export default function VideoMeet() {
     setAskForDisplayName(false);
     setCallStartTime(new Date());
 
+    // get both video + audio (if available)
     await getUserMedia(true, true);
     setVideo(true);
     setAudio(true);
 
-    // slight delay to ensure media is ready
+    // slight delay to ensure media is ready & this is a user gesture
     setTimeout(connectToSocketServer, 300);
   };
 
@@ -441,9 +526,7 @@ export default function VideoMeet() {
     setVideo(nv);
     if (!screen) await getUserMedia(nv, audio);
 
-    // if we turned off video we need to replace track with audio-only
     if (!nv && window.localStream) {
-      // stop video tracks
       window.localStream.getVideoTracks().forEach(t => t.stop());
     }
   };
@@ -634,163 +717,158 @@ export default function VideoMeet() {
           </Box>
 
           {/* chat */}
- {/* CHAT PANEL */}
-{/* CHAT PANEL */}
-{showChat && (
-  <Paper
-    sx={{
-      position: "absolute",
-      right: 0,
-      top: 0,
-      width: { xs: "100%", sm: 360 },
-      height: "100%",
-      display: "flex",
-      flexDirection: "column",
-      borderLeft: "1px solid #222",
-      background: "#111",
-      boxShadow: "-4px 0 15px rgba(0,0,0,0.4)",
-    }}
-  >
-    {/* Chat Header */}
-    <Box
-      sx={{
-        p: 2,
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        background: "linear-gradient(135deg, #667eea, #764ba2)",
-        color: "#fff",
-      }}
-    >
-      <Typography variant="h6" sx={{ fontWeight: 600 }}>
-        Live Chat
-      </Typography>
-      <IconButton
-        size="small"
-        onClick={() => setShowChat(false)}
-        sx={{ color: "#fff" }}
-      >
-        <CloseIcon />
-      </IconButton>
-    </Box>
+          {showChat && (
+            <Paper
+              sx={{
+                position: "absolute",
+                right: 0,
+                top: 0,
+                width: { xs: "100%", sm: 360 },
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+                borderLeft: "1px solid #222",
+                background: "#111",
+                boxShadow: "-4px 0 15px rgba(0,0,0,0.4)",
+              }}
+            >
+              <Box
+                sx={{
+                  p: 2,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  background: "linear-gradient(135deg, #667eea, #764ba2)",
+                  color: "#fff",
+                }}
+              >
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  Live Chat
+                </Typography>
+                <IconButton
+                  size="small"
+                  onClick={() => setShowChat(false)}
+                  sx={{ color: "#fff" }}
+                >
+                  <CloseIcon />
+                </IconButton>
+              </Box>
 
-    {/* Message List */}
-    <Box
-      sx={{
-        flex: 1,
-        p: 2,
-        overflowY: "auto",
-        display: "grid",
-        gridTemplateColumns: "1fr",
-        gap: 1.5,
-        paddingBottom: "80px", // <-- space for input
-      }}
-    >
-      {messages.map((m, i) => (
-        <Box
-          key={i}
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: m.isOwn ? "flex-end" : "flex-start",
-          }}
-        >
-          <Typography
-            variant="caption"
-            sx={{
-              mb: 0.5,
-              color: "#aaa",
-              fontSize: "0.75rem",
-            }}
-          >
-            {m.isOwn ? "You" : m.sender}
-          </Typography>
+              <Box
+                sx={{
+                  flex: 1,
+                  p: 2,
+                  overflowY: "auto",
+                  display: "grid",
+                  gridTemplateColumns: "1fr",
+                  gap: 1.5,
+                  paddingBottom: "80px",
+                }}
+              >
+                {messages.map((m, i) => (
+                  <Box
+                    key={i}
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: m.isOwn ? "flex-end" : "flex-start",
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        mb: 0.5,
+                        color: "#aaa",
+                        fontSize: "0.75rem",
+                      }}
+                    >
+                      {m.isOwn ? "You" : m.sender}
+                    </Typography>
 
-          <Box
-            sx={{
-              maxWidth: "75%",
-              padding: "10px 14px",
-              borderRadius: 2,
-              fontSize: "0.95rem",
-              background: m.isOwn
-                ? "linear-gradient(135deg,#4f8ef7,#6aa8ff)"
-                : "#1e1e1e",
-              color: m.isOwn ? "#fff" : "#ddd",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-              wordBreak: "break-word",
-            }}
-          >
-            {m.data}
-          </Box>
+                    <Box
+                      sx={{
+                        maxWidth: "75%",
+                        padding: "10px 14px",
+                        borderRadius: 2,
+                        fontSize: "0.95rem",
+                        background: m.isOwn
+                          ? "linear-gradient(135deg,#4f8ef7,#6aa8ff)"
+                          : "#1e1e1e",
+                        color: m.isOwn ? "#fff" : "#ddd",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {m.data}
+                    </Box>
 
-          <Typography
-            variant="caption"
-            sx={{
-              mt: 0.4,
-              color: "#666",
-              fontSize: "0.7rem",
-            }}
-          >
-            {m.timestamp}
-          </Typography>
-        </Box>
-      ))}
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        mt: 0.4,
+                        color: "#666",
+                        fontSize: "0.7rem",
+                      }}
+                    >
+                      {m.timestamp}
+                    </Typography>
+                  </Box>
+                ))}
 
-      <div ref={messagesEndRef} />
-    </Box>
+                <div ref={messagesEndRef} />
+              </Box>
 
-    {/* Input Box */}
-    <Box
-      sx={{
-        p: 2,
-        borderTop: "1px solid #333",
-        background: "#0d0d0d",
-        display: "flex",
-        gap: 1,
-        position: "absolute",
-        bottom: 0,
-        left: 0,
-        right: 0,
-      }}
-    >
-      <TextField
-        fullWidth
-        size="small"
-        placeholder="Type a message..."
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-          }
-        }}
-        sx={{
-          "& .MuiInputBase-root": {
-            background: "#1a1a1a",
-            color: "#eee",
-            borderRadius: "10px",
-          },
-        }}
-      />
+              <Box
+                sx={{
+                  p: 2,
+                  borderTop: "1px solid #333",
+                  background: "#0d0d0d",
+                  display: "flex",
+                  gap: 1,
+                  position: "absolute",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                }}
+              >
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Type a message..."
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  sx={{
+                    "& .MuiInputBase-root": {
+                      background: "#1a1a1a",
+                      color: "#eee",
+                      borderRadius: "10px",
+                    },
+                  }}
+                />
 
-      <IconButton
-        sx={{
-          background: "#667eea",
-          color: "#fff",
-          "&:hover": { background: "#5566d4" },
-          borderRadius: "10px",
-          width: 48,
-          height: 48,
-        }}
-        onClick={sendMessage}
-        disabled={!message.trim()}
-      >
-        <SendIcon />
-      </IconButton>
-    </Box>
-  </Paper>
-)}
+                <IconButton
+                  sx={{
+                    background: "#667eea",
+                    color: "#fff",
+                    "&:hover": { background: "#5566d4" },
+                    borderRadius: "10px",
+                    width: 48,
+                    height: 48,
+                  }}
+                  onClick={sendMessage}
+                  disabled={!message.trim()}
+                >
+                  <SendIcon />
+                </IconButton>
+              </Box>
+            </Paper>
+          )}
 
           {/* controls */}
           <Box

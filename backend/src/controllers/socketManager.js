@@ -4,7 +4,16 @@ import { Server } from "socket.io";
 export const connectToSocket = (server) => {
   const io = new Server(server, {
     cors: {
-      origin: ["http://localhost:3000"],
+      origin: [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+
+        // ✅ Your live frontend URL on Vercel
+        "https://meetup-frontend.vercel.app",
+
+        // Allow Vercel preview deploys (optional but useful)
+        /\.vercel\.app$/,
+      ],
       methods: ["GET", "POST"],
       credentials: true,
     },
@@ -38,10 +47,10 @@ export const connectToSocket = (server) => {
         `👤 ${displayName} joined ${roomId} | Users: ${clients.length}`
       );
 
-      // Notify others
+      // Notify others in the room
       socket.to(roomId).emit("user-joined", socket.id, clients, displayName);
 
-      // Also tell the new user
+      // Notify the new user
       socket.emit("user-joined", socket.id, clients, displayName);
     });
 
@@ -54,7 +63,7 @@ export const connectToSocket = (server) => {
     });
 
     // -------------------------------------------------
-    // CHAT MESSAGE – (FIXED: no double messages)
+    // CHAT MESSAGE
     // -------------------------------------------------
     socket.on("chat-message", (message, sender, senderSocketId) => {
       const info = socketInfo.get(socket.id);
@@ -71,7 +80,7 @@ export const connectToSocket = (server) => {
 
       console.log(`💬 [${roomId}] ${sender}: ${message}`);
 
-      // Send to everyone **including sender**
+      // Broadcast to everyone (including sender)
       io.to(roomId).emit("chat-message", msgData);
     });
 
