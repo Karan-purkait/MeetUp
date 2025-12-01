@@ -477,85 +477,138 @@ export default function VideoMeet() {
   // -------------------------
   // Socket & WebRTC wiring
   // -------------------------
-  const connectToSocketServer = useCallback(() => {
-    socketRef.current = io(server, {
-      transports: ["websocket"],
-      reconnection: true,
-      reconnectionAttempts: 5,
-    });
+// Replace the connectToSocketServer function in VideoMeet.jsx with this fixed version
 
-    socketRef.current.on("connect", () => {
-      socketIdRef.current = socketRef.current.id;
-      socketRef.current.emit("join-call", roomId || "default", displayName);
-    });
+const connectToSocketServer = useCallback(() => {
+  socketRef.current = io(server, {
+    transports: ["websocket"],
+    reconnection: true,
+    reconnectionAttempts: 5,
+  });
 
-    socketRef.current.on("signal", (fromId, message, senderName) => {
-      handleSignal(fromId, message, senderName);
-    });
+  socketRef.current.on("connect", () => {
+    socketIdRef.current = socketRef.current.id;
+    socketRef.current.emit("join-call", roomId || "default", displayName);
+  });
 
-    socketRef.current.on("user-joined", (userId, senderName, clients) => {
-      try {
-        if (userId === socketIdRef.current) return;
-        if (connectionsRef.current[userId]) return;
+  socketRef.current.on("signal", (fromId, message, senderName) => {
+    handleSignal(fromId, message, senderName);
+  });
 
-        const pc = createPeerConnection(userId, senderName || "Guest");
-        addLocalTracksToPc(pc);
+  socketRef.current.on("user-joined", (userId, senderName, clients) => {
+    try {
+      if (userId === socketIdRef.current) return;
+      if (connectionsRef.current[userId]) return;
 
-        pc.createOffer()
-          .then((offer) => pc.setLocalDescription(offer))
-          .then(() => {
-            socketRef.current.emit("signal", userId, JSON.stringify({ sdp: pc.localDescription }), displayName);
-          })
-          .catch((err) => console.error("createOffer error", err));
-      } catch (e) {
-        console.error("user-joined handler error", e);
+      const pc = createPeerConnection(userId, senderName || "Guest");
+      addLocalTracksToPc(pc);
+
+      pc.createOffer()
+        .then((offer) => pc.setLocalDescription(offer))
+        .then(() => {
+          socketRef.current.emit("signal", userId, JSON.stringify({ sdp: pc.localDescription }), displayName);
+        })
+        .catch((err) => console.error("createOffer error", err));
+    } catch (e) {
+      console.error("user-joined handler error", e);
+    }
+  });
+
+  socketRef.current.on("user-left", (userId) => {
+    if (connectionsRef.current[userId]) {
+      try { 
+        connectionsRef.current[userId].close(); 
+      } catch (e) {}
+      delete connectionsRef.current[userId];
+    }
+    setVideos(prev => prev.filter(v => v.socketId !== userId));
+    delete remoteNamesRef.current[userId];
+  });
+
+  // FIXED: Proper chat-message handler
+  socketRef.current.on("chat-message", (messageText, sender, socketIdSender) => {
+    try {
+      // Ensure messageText is a string (not an object)
+      const cleanMessage = typeof messageText === "string" 
+        ? messageText 
+        : typeof messageText === "object" && messageText !== null
+        ? messageText.data || String(messageText)
+        : String(messageText || "");
+
+      // Validate we have the data we need
+      if (!cleanMessage || !sender || !socketIdSender) {
+        console.warn("⚠️ Invalid chat message received:", { messageText, sender, socketIdSender });
+        return;
       }
-    });
 
-    socketRef.current.on("user-left", (userId) => {
-      if (connectionsRef.current[userId]) {
-        try { connectionsRef.current[userId].close(); } catch (e) {}
-        delete connectionsRef.current[userId];
-      }
-      setVideos(prev => prev.filter(v => v.socketId !== userId));
-      delete remoteNamesRef.current[userId];
-    });
-
-    socketRef.current.on("chat-message", (data, sender, socketIdSender) => {
       const msg = {
-        sender,
-        data,
+        sender: String(sender),
+        data: cleanMessage,
         timestamp: new Date().toLocaleTimeString(),
         socketId: socketIdSender,
         isOwn: socketIdSender === socketIdRef.current,
       };
-      setMessages(prev => [...prev, msg]);
+
+      console.log("📨 Valid chat message received:", msg);
+
+      setMessages(prev => {
+        if (!Array.isArray(prev)) {
+          return [msg];
+        }
+        return [...prev, msg];
+      });
+
       if (socketIdSender !== socketIdRef.current && !showChat) {
         setNewMessages(n => n + 1);
       }
-    });
+    } catch (error) {
+      console.error("❌ Error processing chat message:", error);
+    }
+  });
 
-    socketRef.current.on("disconnect", () => {
-      Object.values(connectionsRef.current).forEach(pc => pc.close());
-      connectionsRef.current = {};
-      setVideos([]);
-    });
-  }, [roomId, displayName, handleSignal, showChat]);
+  socketRef.current.on("disconnect", () => {
+    Object.values(connectionsRef.current).forEach(pc => pc.close());
+    connectionsRef.current = {};
+    setVideos([]);
+  });
+}, [roomId, displayName, handleSignal, showChat]);
 
   // send chat
-  const sendMessage = useCallback(() => {
-    if (!message.trim() || !socketRef.current?.connected) return;
+// Replace the sendMessage function in VideoMeet.jsx with this fixed version
+
+// send chat - FIXED VERSION
+const sendMessage = useCallback(() => {
+  if (!message.trim() || !socketRef.current?.connected) {
+    console.warn("Cannot send: message empty or socket not connected");
+    return;
+  }
+
+  try {
     const msg = {
-      sender: displayName,
-      data: message,
+      sender: displayName || "Guest",
+      data: message.trim(),
       timestamp: new Date().toLocaleTimeString(),
       socketId: socketIdRef.current,
       isOwn: true,
     };
-    socketRef.current.emit("chat-message", message, displayName, socketIdRef.current);
-    setMessages(prev => [...prev, msg]);
+
+    // Emit to server with proper parameters
+    socketRef.current.emit("chat-message", message.trim(), displayName || "Guest", socketIdRef.current);
+
+    // Add to local state immediately
+    setMessages(prev => {
+      if (!Array.isArray(prev)) {
+        return [msg];
+      }
+      return [...prev, msg];
+    });
+
+    console.log("📤 Message sent:", msg);
     setMessage("");
-  }, [message, displayName]);
+  } catch (error) {
+    console.error("Error sending message:", error);
+  }
+}, [message, displayName]);
 
   // -------------------------
   // UI handlers
@@ -788,159 +841,270 @@ export default function VideoMeet() {
           </Box>
 
           {/* chat */}
-          {showChat && (
-            <Paper
+         {/* chat */}
+// Replace the chat section in VideoMeet.jsx with this enhanced version
+
+{/* ENHANCED CHAT */}
+{showChat && (
+  <Paper
+    sx={{
+      position: "absolute",
+      right: 0,
+      top: 0,
+      width: { xs: "100%", sm: 420 },
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+      background: "linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)",
+      borderLeft: "2px solid rgba(167, 139, 250, 0.5)",
+      boxShadow: "-8px 0 32px rgba(0,0,0,0.6), inset -1px 0 20px rgba(167, 139, 250, 0.1)",
+      backdropFilter: "blur(10px)",
+      zIndex: 1000,
+    }}
+  >
+    {/* Chat Header */}
+    <Box
+      sx={{
+        p: 2.5,
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        borderBottom: "2px solid rgba(167, 139, 250, 0.3)",
+        boxShadow: "0 4px 20px rgba(102, 126, 234, 0.3)",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, position: "relative", zIndex: 1 }}>
+        <Box
+          sx={{
+            width: 10,
+            height: 10,
+            background: "#4ade80",
+            borderRadius: "50%",
+            boxShadow: "0 0 10px #4ade80",
+          }}
+        />
+        <Typography
+          variant="h6"
+          sx={{
+            fontWeight: 700,
+            color: "#fff",
+            fontSize: "1.1rem",
+            letterSpacing: "0.5px",
+          }}
+        >
+          Enchanted Chat
+        </Typography>
+      </Box>
+
+      <IconButton
+        size="small"
+        onClick={() => setShowChat(false)}
+        sx={{
+          color: "#fff",
+          transition: "all 0.3s ease",
+          "&:hover": {
+            background: "rgba(255,255,255,0.2)",
+          },
+        }}
+      >
+        <CloseIcon />
+      </IconButton>
+    </Box>
+
+    {/* Messages Container */}
+    <Box
+      sx={{
+        flex: 1,
+        overflowY: "auto",
+        p: 2,
+        display: "flex",
+        flexDirection: "column",
+        gap: 1.5,
+        background: "linear-gradient(to bottom, rgba(15, 12, 41, 0.8), rgba(48, 43, 99, 0.6))",
+
+        "&::-webkit-scrollbar": {
+          width: "6px",
+        },
+        "&::-webkit-scrollbar-track": {
+          background: "transparent",
+        },
+        "&::-webkit-scrollbar-thumb": {
+          background: "linear-gradient(to bottom, #a78bfa, #667eea)",
+          borderRadius: "3px",
+        },
+      }}
+    >
+      {!Array.isArray(messages) || messages.length === 0 ? (
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "100%",
+            textAlign: "center",
+            gap: 1,
+          }}
+        >
+          <Typography variant="body2" sx={{ color: "#a78bfa" }}>
+            ✨ Welcome to the Enchanted Realm ✨
+          </Typography>
+          <Typography variant="caption" sx={{ color: "#666" }}>
+            Messages will appear here
+          </Typography>
+        </Box>
+      ) : (
+        messages.map((m, i) => {
+          // Safety check - skip invalid messages
+          if (!m || typeof m !== "object" || !m.data) {
+            return null;
+          }
+
+          return (
+            <Box
+              key={`msg-${i}`}
               sx={{
-                position: "absolute",
-                right: 0,
-                top: 0,
-                width: { xs: "100%", sm: 360 },
-                height: "100%",
                 display: "flex",
                 flexDirection: "column",
-                borderLeft: "1px solid #222",
-                background: "#111",
-                boxShadow: "-4px 0 15px rgba(0,0,0,0.4)",
+                alignItems: m.isOwn ? "flex-end" : "flex-start",
               }}
             >
-              <Box
+              {/* Sender Name */}
+              <Typography
+                variant="caption"
                 sx={{
-                  p: 2,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  background: "linear-gradient(135deg, #667eea, #764ba2)",
-                  color: "#fff",
+                  mb: 0.5,
+                  color: m.isOwn ? "#a78bfa" : "#64748b",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
                 }}
               >
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  Live Chat
-                </Typography>
-                <IconButton
-                  size="small"
-                  onClick={() => setShowChat(false)}
-                  sx={{ color: "#fff" }}
-                >
-                  <CloseIcon />
-                </IconButton>
-              </Box>
+                {m.isOwn ? "⚔️ You" : `🧙 ${m.sender || "Unknown"}`}
+              </Typography>
 
+              {/* Message Bubble */}
               <Box
                 sx={{
-                  flex: 1,
-                  p: 2,
-                  overflowY: "auto",
-                  display: "grid",
-                  gridTemplateColumns: "1fr",
-                  gap: 1.5,
-                  paddingBottom: "80px",
+                  maxWidth: "80%",
+                  padding: "12px 16px",
+                  borderRadius: m.isOwn ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                  fontSize: "0.95rem",
+                  fontWeight: 500,
+                  lineHeight: 1.4,
+                  wordBreak: "break-word",
+                  transition: "all 0.3s ease",
+                  background: m.isOwn
+                    ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                    : "linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(118, 75, 162, 0.15) 100%)",
+                  border: m.isOwn
+                    ? "1px solid rgba(167, 139, 250, 0.4)"
+                    : "1px solid rgba(167, 139, 250, 0.3)",
+                  color: m.isOwn ? "#fff" : "#e2e8f0",
+                  boxShadow: m.isOwn
+                    ? "0 4px 16px rgba(102, 126, 234, 0.4)"
+                    : "0 2px 8px rgba(0, 0, 0, 0.2)",
+
+                  "&:hover": {
+                    transform: "translateY(-2px)",
+                    boxShadow: m.isOwn
+                      ? "0 6px 20px rgba(102, 126, 234, 0.5)"
+                      : "0 4px 12px rgba(102, 126, 234, 0.3)",
+                  },
                 }}
               >
-                {messages.map((m, i) => (
-                  <Box
-                    key={i}
-                    sx={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: m.isOwn ? "flex-end" : "flex-start",
-                    }}
-                  >
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        mb: 0.5,
-                        color: "#aaa",
-                        fontSize: "0.75rem",
-                      }}
-                    >
-                      {m.isOwn ? "You" : m.sender}
-                    </Typography>
-
-                    <Box
-                      sx={{
-                        maxWidth: "75%",
-                        padding: "10px 14px",
-                        borderRadius: 2,
-                        fontSize: "0.95rem",
-                        background: m.isOwn
-                          ? "linear-gradient(135deg,#4f8ef7,#6aa8ff)"
-                          : "#1e1e1e",
-                        color: m.isOwn ? "#fff" : "#ddd",
-                        boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-                        wordBreak: "break-word",
-                      }}
-                    >
-                      {m.data}
-                    </Box>
-
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        mt: 0.4,
-                        color: "#666",
-                        fontSize: "0.7rem",
-                      }}
-                    >
-                      {m.timestamp}
-                    </Typography>
-                  </Box>
-                ))}
-
-                <div ref={messagesEndRef} />
+                {String(m.data)}
+                {m.isOwn && <span style={{ marginLeft: "8px" }}>✨</span>}
               </Box>
 
-              <Box
+              {/* Timestamp */}
+              <Typography
+                variant="caption"
                 sx={{
-                  p: 2,
-                  borderTop: "1px solid #333",
-                  background: "#0d0d0d",
-                  display: "flex",
-                  gap: 1,
-                  position: "absolute",
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
+                  mt: 0.4,
+                  color: "#4b5563",
+                  fontSize: "0.7rem",
                 }}
               >
-                <TextField
-                  fullWidth
-                  size="small"
-                  placeholder="Type a message..."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendMessage();
-                    }
-                  }}
-                  sx={{
-                    "& .MuiInputBase-root": {
-                      background: "#1a1a1a",
-                      color: "#eee",
-                      borderRadius: "10px",
-                    },
-                  }}
-                />
+                {m.timestamp || ""}
+              </Typography>
+            </Box>
+          );
+        })
+      )}
+      <div ref={messagesEndRef} />
+    </Box>
 
-                <IconButton
-                  sx={{
-                    background: "#667eea",
-                    color: "#fff",
-                    "&:hover": { background: "#5566d4" },
-                    borderRadius: "10px",
-                    width: 48,
-                    height: 48,
-                  }}
-                  onClick={sendMessage}
-                  disabled={!message.trim()}
-                >
-                  <SendIcon />
-                </IconButton>
-              </Box>
-            </Paper>
-          )}
+    {/* Input Section */}
+    <Box
+      sx={{
+        p: 2,
+        borderTop: "1px solid rgba(167, 139, 250, 0.2)",
+        background: "linear-gradient(135deg, rgba(15, 12, 41, 0.9) 0%, rgba(48, 43, 99, 0.7) 100%)",
+        display: "flex",
+        gap: 1,
+      }}
+    >
+      <TextField
+        fullWidth
+        size="small"
+        placeholder="Whisper your message..."
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+          }
+        }}
+        sx={{
+          "& .MuiInputBase-root": {
+            background: "linear-gradient(135deg, rgba(48, 43, 99, 0.8) 0%, rgba(30, 27, 75, 0.8) 100%)",
+            color: "#e2e8f0",
+            borderRadius: "12px",
+            border: "1px solid rgba(167, 139, 250, 0.3)",
+            "&.Mui-focused": {
+              borderColor: "rgba(167, 139, 250, 0.7)",
+              boxShadow: "0 0 16px rgba(167, 139, 250, 0.3)",
+            },
+          },
+          "& .MuiInputBase-input::placeholder": {
+            color: "#8b8fa8",
+            opacity: 1,
+          },
+        }}
+      />
+      <IconButton
+        onClick={sendMessage}
+        disabled={!message.trim()}
+        sx={{
+          width: 48,
+          height: 48,
+          borderRadius: "12px",
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          color: "#fff",
+          border: "1px solid rgba(167, 139, 250, 0.5)",
+          transition: "all 0.3s ease",
 
+          "&:hover:not(:disabled)": {
+            transform: "scale(1.05) translateY(-2px)",
+            boxShadow: "0 6px 20px rgba(102, 126, 234, 0.5)",
+          },
+
+          "&:disabled": {
+            opacity: 0.4,
+            cursor: "not-allowed",
+          },
+        }}
+      >
+        <SendIcon sx={{ fontSize: 20 }} />
+      </IconButton>
+    </Box>
+  </Paper>
+)}
           {/* controls */}
           <Box
             sx={{

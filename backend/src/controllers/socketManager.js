@@ -7,11 +7,7 @@ export const connectToSocket = (server) => {
       origin: [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-
-        // ✅ Your live frontend URL on Vercel
         "https://meetup-frontend.vercel.app",
-
-        // Allow Vercel preview deploys (optional but useful)
         /\.vercel\.app$/,
       ],
       methods: ["GET", "POST"],
@@ -48,10 +44,10 @@ export const connectToSocket = (server) => {
       );
 
       // Notify others in the room
-      socket.to(roomId).emit("user-joined", socket.id, clients, displayName);
+      socket.to(roomId).emit("user-joined", socket.id, displayName, clients);
 
       // Notify the new user
-      socket.emit("user-joined", socket.id, clients, displayName);
+      socket.emit("user-joined", socket.id, displayName, clients);
     });
 
     // -------------------------------------------------
@@ -63,25 +59,32 @@ export const connectToSocket = (server) => {
     });
 
     // -------------------------------------------------
-    // CHAT MESSAGE
+    // CHAT MESSAGE - FIXED: Send string message, not object
     // -------------------------------------------------
-    socket.on("chat-message", (message, sender, senderSocketId) => {
+    socket.on("chat-message", (messageText, sender, senderSocketId) => {
       const info = socketInfo.get(socket.id);
       if (!info) return;
 
       const { roomId } = info;
 
-      const msgData = {
-        sender,
-        data: message,
-        timestamp: new Date().toLocaleTimeString(),
-        socketId: senderSocketId,
-      };
+      // Ensure messageText is a string
+      const cleanMessage = typeof messageText === "string" ? messageText : String(messageText || "");
 
-      console.log(`💬 [${roomId}] ${sender}: ${message}`);
+      console.log(`💬 [${roomId}] ${sender}: ${cleanMessage}`);
 
-      // Broadcast to everyone (including sender)
-      io.to(roomId).emit("chat-message", msgData);
+      // IMPORTANT: Emit as separate parameters matching frontend expectation
+      // Parameters: (messageString, senderName, senderId)
+      io.to(roomId).emit("chat-message", cleanMessage, sender, senderSocketId);
+    });
+
+    // -------------------------------------------------
+    // LEAVE CALL
+    // -------------------------------------------------
+    socket.on("leave-call", (roomId) => {
+      const info = socketInfo.get(socket.id);
+      if (info) {
+        socket.to(roomId).emit("user-left", socket.id);
+      }
     });
 
     // -------------------------------------------------
