@@ -39,6 +39,7 @@ import StopIcon from "@mui/icons-material/Stop";
 import LockIcon from "@mui/icons-material/Lock";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import AspectRatioIcon from "@mui/icons-material/AspectRatio";
 import server from "../environment";
 import { useParams, useNavigate } from "react-router-dom";
 import { AuthContext } from "../contexts/AuthContext";
@@ -141,6 +142,7 @@ export default function VideoMeet() {
 
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [isSwapped, setIsSwapped] = useState(false);
+  const [fitMode, setFitMode] = useState("contain");
 
   const handleCopyLink = () => {
     const url = window.location.origin + "/" + roomId;
@@ -944,7 +946,7 @@ const handleFileUpload = (e) => {
                   zIndex: 20, // Keep above everything
                 }}
               >
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", width: "100%" }}>
                   <Typography variant="h6" color="white" sx={{ fontWeight: 500, textShadow: "0px 1px 3px rgba(0,0,0,0.8)" }}>
                     {videos[0].displayName}
                   </Typography>
@@ -955,14 +957,23 @@ const handleFileUpload = (e) => {
                     </Typography>
                   </Box>
                 </Box>
-                <IconButton sx={{ color: "white", position: "absolute", right: 16, top: 40 }} onClick={() => setShowChat(true)}>
-                  <PersonAddIcon />
-                </IconButton>
+                <Box sx={{ display: "flex", gap: 1 }}>
+                  <Tooltip title="Toggle Fit/Fill">
+                    <IconButton sx={{ color: "white", bgcolor: "rgba(255,255,255,0.1)" }} onClick={() => setFitMode(f => f === "contain" ? "cover" : "contain")}>
+                      <AspectRatioIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Chat">
+                    <IconButton sx={{ color: "white", bgcolor: "rgba(255,255,255,0.1)" }} onClick={() => setShowChat(true)}>
+                      <PersonAddIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               </Box>
 
               {/* Local Video */}
               <Box
-                onClick={() => isSwapped && setIsSwapped(false)}
+                onClick={() => !isSwapped && setIsSwapped(true)}
                 sx={isSwapped ? {
                   position: "absolute", inset: 0, zIndex: 1, cursor: "default"
                 } : {
@@ -979,6 +990,7 @@ const handleFileUpload = (e) => {
                   backgroundColor: "#333",
                   cursor: "pointer",
                   transition: "all 0.3s ease",
+                  "&:active": { transform: "scale(0.95)" }
                 }}
               >
                 <video
@@ -989,7 +1001,7 @@ const handleFileUpload = (e) => {
                   style={{
                     width: "100%",
                     height: "100%",
-                    objectFit: "cover",
+                    objectFit: isSwapped ? fitMode : "cover",
                     transform: "scaleX(-1)", // Mirror effect
                   }}
                 />
@@ -997,7 +1009,7 @@ const handleFileUpload = (e) => {
 
               {/* Remote Video */}
               <Box
-                onClick={() => !isSwapped && setIsSwapped(true)}
+                onClick={() => isSwapped && setIsSwapped(false)}
                 sx={!isSwapped ? {
                   position: "absolute", inset: 0, zIndex: 1, cursor: "default"
                 } : {
@@ -1014,6 +1026,7 @@ const handleFileUpload = (e) => {
                   backgroundColor: "#333",
                   cursor: "pointer",
                   transition: "all 0.3s ease",
+                  "&:active": { transform: "scale(0.95)" }
                 }}
               >
                 <video
@@ -1023,7 +1036,7 @@ const handleFileUpload = (e) => {
                   style={{
                     width: "100%",
                     height: "100%",
-                    objectFit: "cover",
+                    objectFit: !isSwapped ? fitMode : "cover",
                   }}
                 />
               </Box>
