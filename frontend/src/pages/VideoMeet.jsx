@@ -19,6 +19,7 @@ import {
   Card,
   Paper,
   Tooltip,
+  Snackbar,
 } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import VideocamIcon from "@mui/icons-material/Videocam";
@@ -37,6 +38,7 @@ import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
 import StopIcon from "@mui/icons-material/Stop";
 import LockIcon from "@mui/icons-material/Lock";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import server from "../environment";
 import { useParams, useNavigate } from "react-router-dom";
 import { AuthContext } from "../contexts/AuthContext";
@@ -135,6 +137,23 @@ export default function VideoMeet() {
       }
     };
     checkDevices();
+  }, []);
+
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+
+  const handleCopyLink = () => {
+    const url = window.location.origin + "/" + roomId;
+    navigator.clipboard.writeText(url);
+    setSnackbarMessage("Invite link copied to clipboard!");
+  };
+
+  const attachLocalVideo = useCallback((el) => {
+    localVideoRef.current = el;
+    if (el && window.localStream) {
+      if (el.srcObject !== window.localStream) {
+        el.srcObject = window.localStream;
+      }
+    }
   }, []);
 
   // -------------------------
@@ -839,7 +858,7 @@ const handleFileUpload = (e) => {
               <Paper sx={{ mt: 3, p: 2 }}>
                 <Typography variant="caption">Camera preview</Typography>
                 <video
-                  ref={localVideoRef}
+                  ref={attachLocalVideo}
                   autoPlay
                   muted
                   playsInline
@@ -869,7 +888,7 @@ const handleFileUpload = (e) => {
             // Waiting for others
             <Box sx={{ position: "absolute", inset: 0 }}>
               <video
-                ref={localVideoRef}
+                ref={attachLocalVideo}
                 autoPlay
                 muted
                 playsInline
@@ -969,7 +988,7 @@ const handleFileUpload = (e) => {
                 }}
               >
                 <video
-                  ref={localVideoRef}
+                  ref={attachLocalVideo}
                   autoPlay
                   muted
                   playsInline
@@ -998,7 +1017,7 @@ const handleFileUpload = (e) => {
             >
               <Card sx={{ position: "relative", background: "#333", borderRadius: 3, overflow: "hidden" }}>
                 <video
-                  ref={localVideoRef}
+                  ref={attachLocalVideo}
                   autoPlay
                   muted
                   playsInline
@@ -1339,17 +1358,17 @@ const handleFileUpload = (e) => {
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
-              gap: 2,
+              gap: { xs: 1, sm: 2 },
               background: "linear-gradient(to top, rgba(0,0,0,0.9), transparent)",
               zIndex: 10,
             }}
           >
-            <Tooltip title={screenAvailable ? (screenOn ? "Stop sharing" : "Share screen") : "Share not available"}>
+            <Tooltip title="Copy Invite Link">
               <IconButton
-                onClick={handleToggleScreen}
+                onClick={handleCopyLink}
                 sx={{ 
-                  bgcolor: screenOn ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)", 
-                  color: screenOn ? "#4ade80" : "#fff",
+                  bgcolor: "rgba(255,255,255,0.1)", 
+                  color: "#fff",
                   backdropFilter: "blur(10px)",
                   width: 50,
                   height: 50,
@@ -1357,9 +1376,28 @@ const handleFileUpload = (e) => {
                   "&:hover": { bgcolor: "rgba(255,255,255,0.3)" }
                 }}
               >
-                {screenOn ? <StopScreenShareIcon /> : <ScreenShareIcon />}
+                <ContentCopyIcon />
               </IconButton>
             </Tooltip>
+
+            {screenAvailable && (
+              <Tooltip title={screenOn ? "Stop sharing" : "Share screen"}>
+                <IconButton
+                  onClick={handleToggleScreen}
+                  sx={{ 
+                    bgcolor: screenOn ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)", 
+                    color: screenOn ? "#4ade80" : "#fff",
+                    backdropFilter: "blur(10px)",
+                    width: 50,
+                    height: 50,
+                    transition: "all 0.2s",
+                    "&:hover": { bgcolor: "rgba(255,255,255,0.3)" }
+                  }}
+                >
+                  {screenOn ? <StopScreenShareIcon /> : <ScreenShareIcon />}
+                </IconButton>
+              </Tooltip>
+            )}
 
             <Tooltip title={videoOn ? "Turn off camera" : "Turn on camera"}>
               <IconButton
@@ -1395,6 +1433,23 @@ const handleFileUpload = (e) => {
               </IconButton>
             </Tooltip>
 
+            <Tooltip title={isRecording ? "Stop recording" : "Record call"}>
+              <IconButton
+                onClick={handleToggleRecording}
+                sx={{ 
+                  bgcolor: isRecording ? "#ef4444" : "rgba(255,255,255,0.1)", 
+                  color: "#fff",
+                  backdropFilter: "blur(10px)",
+                  width: 50,
+                  height: 50,
+                  transition: "all 0.2s",
+                  "&:hover": { bgcolor: isRecording ? "#dc2626" : "rgba(255,255,255,0.3)" }
+                }}
+              >
+                {isRecording ? <StopIcon /> : <FiberManualRecordIcon />}
+              </IconButton>
+            </Tooltip>
+
             <Tooltip title="Chat">
               <Badge badgeContent={newMessages} color="error" overlap="circular">
                 <IconButton
@@ -1426,7 +1481,7 @@ const handleFileUpload = (e) => {
                   color: "#fff",
                   width: 64,
                   height: 64,
-                  ml: 1, // Add a bit of margin to separate it visually
+                  ml: { xs: 0, sm: 2 }, // Add margin on larger screens
                   boxShadow: "0 4px 12px rgba(239, 68, 68, 0.4)",
                   "&:hover": { bgcolor: "#dc2626", transform: "scale(1.05)" },
                   transition: "all 0.2s"
@@ -1438,6 +1493,14 @@ const handleFileUpload = (e) => {
           </Box>
         </Box>
       )}
+
+      <Snackbar
+        open={Boolean(snackbarMessage)}
+        autoHideDuration={3000}
+        onClose={() => setSnackbarMessage("")}
+        message={snackbarMessage}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      />
     </ThemeProvider>
   );
 }
