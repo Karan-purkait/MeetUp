@@ -34,6 +34,9 @@ import CloseIcon from "@mui/icons-material/Close";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
 import StopIcon from "@mui/icons-material/Stop";
+import LockIcon from "@mui/icons-material/Lock";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import CameraswitchIcon from "@mui/icons-material/Cameraswitch";
 import server from "../environment";
 import { useParams, useNavigate } from "react-router-dom";
 import { AuthContext } from "../contexts/AuthContext";
@@ -861,18 +864,10 @@ const handleFileUpload = (e) => {
             overflow: "hidden",
           }}
         >
-          {/* video grid */}
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-              gap: 2,
-              p: 2,
-              height: "100%",
-              overflowY: "auto",
-            }}
-          >
-            <Card sx={{ position: "relative", background: "#000", borderRadius: 2 }}>
+          {/* WhatsApp Style Video Layout */}
+          {videos.length === 0 ? (
+            // Waiting for others
+            <Box sx={{ position: "absolute", inset: 0 }}>
               <video
                 ref={localVideoRef}
                 autoPlay
@@ -881,59 +876,153 @@ const handleFileUpload = (e) => {
                 style={{
                   width: "100%",
                   height: "100%",
-                  minHeight: 260,
                   objectFit: "cover",
+                  transform: "scaleX(-1)", // Mirror effect for local video
                 }}
               />
               <Box
                 sx={{
                   position: "absolute",
-                  bottom: 8,
-                  left: 8,
-                  color: "#fff",
-                  bgcolor: "rgba(0,0,0,0.6)",
-                  px: 1.5,
-                  py: 0.5,
-                  borderRadius: 2,
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  p: 3,
+                  pt: 6,
+                  background: "linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
                 }}
               >
-                {displayName} (You)
+                <Typography variant="h6" color="white" sx={{ fontWeight: 500 }}>
+                  Waiting for others...
+                </Typography>
+                <Box sx={{ display: "flex", alignItems: "center", mt: 0.5, opacity: 0.8 }}>
+                  <LockIcon sx={{ fontSize: 12, color: "white", mr: 0.5 }} />
+                  <Typography variant="caption" color="white">
+                    End-to-end encrypted
+                  </Typography>
+                </Box>
               </Box>
-            </Card>
+            </Box>
+          ) : videos.length === 1 ? (
+            // 1-on-1 Call Layout
+            <Box sx={{ position: "absolute", inset: 0 }}>
+              {/* Remote Video */}
+              <video
+                autoPlay
+                playsInline
+                ref={(el) => setVideoRef(videos[0].socketId, el)}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                }}
+              />
 
-            {videos.map((v) => (
+              {/* Top Bar Overlay */}
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  p: 3,
+                  pt: 6,
+                  background: "linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  zIndex: 10,
+                }}
+              >
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+                  <Typography variant="h6" color="white" sx={{ fontWeight: 500, textShadow: "0px 1px 3px rgba(0,0,0,0.8)" }}>
+                    {videos[0].displayName}
+                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", mt: 0.5, opacity: 0.9 }}>
+                    <LockIcon sx={{ fontSize: 12, color: "white", mr: 0.5 }} />
+                    <Typography variant="caption" color="white" sx={{ textShadow: "0px 1px 2px rgba(0,0,0,0.8)" }}>
+                      End-to-end encrypted
+                    </Typography>
+                  </Box>
+                </Box>
+                <IconButton sx={{ color: "white", position: "absolute", right: 16, top: 40 }} onClick={() => setShowChat(true)}>
+                  <PersonAddIcon />
+                </IconButton>
+              </Box>
+
+              {/* Local Video PIP */}
               <Card
-                key={v.socketId}
-                sx={{ position: "relative", background: "#000", borderRadius: 2 }}
+                sx={{
+                  position: "absolute",
+                  bottom: 120, // Right above the bottom controls
+                  right: 16,
+                  width: 100,
+                  height: 150,
+                  borderRadius: 3,
+                  overflow: "hidden",
+                  border: "2px solid rgba(255,255,255,0.2)",
+                  boxShadow: "0 8px 16px rgba(0,0,0,0.5)",
+                  zIndex: 10,
+                  backgroundColor: "#333",
+                }}
               >
                 <video
+                  ref={localVideoRef}
                   autoPlay
+                  muted
                   playsInline
-                  ref={(el) => setVideoRef(v.socketId, el)}
                   style={{
                     width: "100%",
                     height: "100%",
-                    minHeight: 260,
                     objectFit: "cover",
+                    transform: "scaleX(-1)", // Mirror effect
                   }}
                 />
-                <Box
-                  sx={{
-                    position: "absolute",
-                    bottom: 8,
-                    left: 8,
-                    color: "#fff",
-                    bgcolor: "rgba(0,0,0,0.6)",
-                    px: 1.5,
-                    py: 0.5,
-                    borderRadius: 2,
-                  }}
-                >
-                  {v.displayName}
+              </Card>
+            </Box>
+          ) : (
+            // Group Call Layout (Grid)
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: videos.length > 2 ? "1fr 1fr" : "1fr",
+                gridTemplateRows: videos.length > 2 ? "1fr 1fr" : "1fr 1fr",
+                gap: 1,
+                p: 1,
+                height: "calc(100vh - 100px)", // Leave space for bottom controls
+                overflowY: "auto",
+                bgcolor: "#000",
+              }}
+            >
+              <Card sx={{ position: "relative", background: "#333", borderRadius: 3, overflow: "hidden" }}>
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }}
+                />
+                <Box sx={{ position: "absolute", bottom: 8, left: 8, color: "#fff", bgcolor: "rgba(0,0,0,0.5)", px: 1, py: 0.5, borderRadius: 1, fontSize: "0.8rem" }}>
+                  You
                 </Box>
               </Card>
-            ))}
-          </Box>
+              {videos.map((v) => (
+                <Card key={v.socketId} sx={{ position: "relative", background: "#333", borderRadius: 3, overflow: "hidden" }}>
+                  <video
+                    autoPlay
+                    playsInline
+                    ref={(el) => setVideoRef(v.socketId, el)}
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                  <Box sx={{ position: "absolute", bottom: 8, left: 8, color: "#fff", bgcolor: "rgba(0,0,0,0.5)", px: 1, py: 0.5, borderRadius: 1, fontSize: "0.8rem" }}>
+                    {v.displayName}
+                  </Box>
+                </Card>
+              ))}
+            </Box>
+          )}
 
           {/* chat */}
           {/* chat */}
@@ -1238,70 +1327,112 @@ const handleFileUpload = (e) => {
     </Box>
   </Paper>
 )}
-          {/* controls */}
+          {/* WhatsApp Style Bottom Controls */}
           <Box
             sx={{
               position: "absolute",
               bottom: 0,
               left: 0,
               right: 0,
-              p: 2,
+              pb: 4,
+              pt: 3,
               display: "flex",
               justifyContent: "center",
+              alignItems: "center",
               gap: 2,
-              bgcolor: "rgba(0,0,0,0.7)",
+              background: "linear-gradient(to top, rgba(0,0,0,0.9), transparent)",
+              zIndex: 10,
             }}
           >
+            <Tooltip title={screenAvailable ? (screenOn ? "Stop sharing" : "Share screen") : "Share not available"}>
+              <IconButton
+                onClick={handleToggleScreen}
+                sx={{ 
+                  bgcolor: screenOn ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)", 
+                  color: screenOn ? "#4ade80" : "#fff",
+                  backdropFilter: "blur(10px)",
+                  width: 50,
+                  height: 50,
+                  transition: "all 0.2s",
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" }
+                }}
+              >
+                {screenOn ? <StopScreenShareIcon /> : <ScreenShareIcon />}
+              </IconButton>
+            </Tooltip>
+
             <Tooltip title={videoOn ? "Turn off camera" : "Turn on camera"}>
               <IconButton
                 onClick={handleToggleVideo}
-                sx={{ bgcolor: videoOn ? "#667eea" : "#ef4444", color: "#fff" }}
+                sx={{ 
+                  bgcolor: videoOn ? "rgba(255,255,255,0.1)" : "#ef4444", 
+                  color: "#fff",
+                  backdropFilter: "blur(10px)",
+                  width: 50,
+                  height: 50,
+                  transition: "all 0.2s",
+                  "&:hover": { bgcolor: videoOn ? "rgba(255,255,255,0.3)" : "#dc2626" }
+                }}
               >
                 {videoOn ? <VideocamIcon /> : <VideocamOffIcon />}
               </IconButton>
             </Tooltip>
+
             <Tooltip title={audioOn ? "Mute" : "Unmute"}>
               <IconButton
                 onClick={handleToggleAudio}
-                sx={{ bgcolor: audioOn ? "#667eea" : "#ef4444", color: "#fff" }}
+                sx={{ 
+                  bgcolor: audioOn ? "rgba(255,255,255,0.1)" : "#ef4444", 
+                  color: "#fff",
+                  backdropFilter: "blur(10px)",
+                  width: 50,
+                  height: 50,
+                  transition: "all 0.2s",
+                  "&:hover": { bgcolor: audioOn ? "rgba(255,255,255,0.3)" : "#dc2626" }
+                }}
               >
                 {audioOn ? <MicIcon /> : <MicOffIcon />}
               </IconButton>
             </Tooltip>
-            <Tooltip title={isRecording ? "Stop recording" : "Record call"}>
-              <IconButton
-                onClick={handleToggleRecording}
-                sx={{ bgcolor: isRecording ? "#ef4444" : "#667eea", color: "#fff" }}
-              >
-                {isRecording ? <StopIcon /> : <FiberManualRecordIcon />}
-              </IconButton>
-            </Tooltip>
-            {screenAvailable && (
-              <Tooltip title={screenOn ? "Stop sharing" : "Share screen"}>
-                <IconButton
-                  onClick={handleToggleScreen}
-                  sx={{ bgcolor: screenOn ? "#ff9800" : "#667eea", color: "#fff" }}
-                >
-                  {screenOn ? <StopScreenShareIcon /> : <ScreenShareIcon />}
-                </IconButton>
-              </Tooltip>
-            )}
+
             <Tooltip title="Chat">
-              <Badge badgeContent={newMessages} color="primary">
+              <Badge badgeContent={newMessages} color="error" overlap="circular">
                 <IconButton
                   onClick={() => {
                     setShowChat((s) => !s);
                     setNewMessages(0);
                   }}
-                  sx={{ bgcolor: "#667eea", color: "#fff" }}
+                  sx={{ 
+                    bgcolor: "rgba(255,255,255,0.1)", 
+                    color: "#fff",
+                    backdropFilter: "blur(10px)",
+                    width: 50,
+                    height: 50,
+                    transition: "all 0.2s",
+                    "&:hover": { bgcolor: "rgba(255,255,255,0.3)" }
+                  }}
                 >
                   <ChatIcon />
                 </IconButton>
               </Badge>
             </Tooltip>
+
+            {/* End Call Button is prominent and Red */}
             <Tooltip title="End call">
-              <IconButton onClick={handleEndCall} sx={{ bgcolor: "#ef4444", color: "#fff" }}>
-                <CallEndIcon />
+              <IconButton 
+                onClick={handleEndCall} 
+                sx={{ 
+                  bgcolor: "#ef4444", 
+                  color: "#fff",
+                  width: 64,
+                  height: 64,
+                  ml: 1, // Add a bit of margin to separate it visually
+                  boxShadow: "0 4px 12px rgba(239, 68, 68, 0.4)",
+                  "&:hover": { bgcolor: "#dc2626", transform: "scale(1.05)" },
+                  transition: "all 0.2s"
+                }}
+              >
+                <CallEndIcon sx={{ fontSize: 32 }} />
               </IconButton>
             </Tooltip>
           </Box>
