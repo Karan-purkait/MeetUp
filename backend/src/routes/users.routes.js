@@ -1,21 +1,25 @@
 import { Router } from "express";
+
 import {
-  addToHistory,
+  completeMeetingSession,
   getUserHistory,
   login,
-  register
+  register,
+  startMeetingSession,
 } from "../controllers/user.controller.js";
 
 const router = Router();
 
-// Auth routes
 router.post("/auth/login", login);
 router.post("/auth/register", register);
 
-// History routes (both patterns for compatibility)
-router.post("/history", addToHistory);
 router.get("/history", getUserHistory);
+router.post("/history/start", startMeetingSession);
+router.patch("/history/:meetingId/complete", completeMeetingSession);
+
+// Compatibility aliases for older frontend calls.
 router.get("/get_all_activity", getUserHistory);
-router.post("/add_to_activity", addToHistory);
+router.post("/add_to_activity", startMeetingSession);
+router.post("/history", startMeetingSession);
 
 export default router;

@@ -31,6 +31,9 @@ import ChatIcon from "@mui/icons-material/Chat";
 import SendIcon from "@mui/icons-material/Send";
 import PersonIcon from "@mui/icons-material/Person";
 import CloseIcon from "@mui/icons-material/Close";
+import AttachFileIcon from "@mui/icons-material/AttachFile";
+import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
+import StopIcon from "@mui/icons-material/Stop";
 import server from "../environment";
 import { useParams, useNavigate } from "react-router-dom";
 import { AuthContext } from "../contexts/AuthContext";
@@ -51,7 +54,8 @@ const peerConfigConnections = {
 };
 
 export default function VideoMeet() {
-  const { roomId } = useParams();
+  const params = useParams();
+  const [roomId, setRoomId] = useState(params.roomId || "");
   const navigate = useNavigate();
   const { addToUserHistory } = useContext(AuthContext);
 
@@ -79,6 +83,12 @@ export default function VideoMeet() {
   const [newMessages, setNewMessages] = useState(0);
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
+
+  const fileInputRef = useRef(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const isConnectingRef = useRef(false);
 
   const [videos, setVideos] = useState([]); // {socketId, stream, displayName}
   const [callStartTime, setCallStartTime] = useState(null);
@@ -480,6 +490,9 @@ export default function VideoMeet() {
 // Replace the connectToSocketServer function in VideoMeet.jsx with this fixed version
 
 const connectToSocketServer = useCallback(() => {
+  if (socketRef.current?.connected) return;
+  if (socketRef.current) socketRef.current.disconnect();
+
   socketRef.current = io(server, {
     transports: ["websocket"],
     reconnection: true,
@@ -579,46 +592,95 @@ const connectToSocketServer = useCallback(() => {
 // send chat - FIXED VERSION
 const sendMessage = useCallback(() => {
   if (!message.trim() || !socketRef.current?.connected) {
-    console.warn("Cannot send: message empty or socket not connected");
     return;
   }
 
   try {
+    const payload = JSON.stringify({ type: "text", text: message.trim() });
     const msg = {
       sender: displayName || "Guest",
-      data: message.trim(),
+      data: payload,
       timestamp: new Date().toLocaleTimeString(),
       socketId: socketIdRef.current,
       isOwn: true,
     };
 
-    // Emit to server with proper parameters
-    socketRef.current.emit("chat-message", message.trim(), displayName || "Guest", socketIdRef.current);
+    socketRef.current.emit("chat-message", payload, displayName || "Guest", socketIdRef.current);
 
-    // Add to local state immediately
     setMessages(prev => {
-      if (!Array.isArray(prev)) {
-        return [msg];
-      }
+      if (!Array.isArray(prev)) return [msg];
       return [...prev, msg];
     });
 
-    console.log("📤 Message sent:", msg);
     setMessage("");
   } catch (error) {
     console.error("Error sending message:", error);
   }
 }, [message, displayName]);
 
+const handleFileUpload = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (file.size > 100 * 1024 * 1024) {
+    alert("File too large. Maximum size is 100MB.");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const fileData = event.target.result;
+    const payload = JSON.stringify({
+      type: "file",
+      fileName: file.name,
+      fileData: fileData,
+      text: message.trim()
+    });
+
+    try {
+      const msg = {
+        sender: displayName || "Guest",
+        data: payload,
+        timestamp: new Date().toLocaleTimeString(),
+        socketId: socketIdRef.current,
+        isOwn: true,
+      };
+
+      socketRef.current.emit("chat-message", payload, displayName || "Guest", socketIdRef.current);
+
+      setMessages(prev => {
+        if (!Array.isArray(prev)) return [msg];
+        return [...prev, msg];
+      });
+
+      setMessage("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (error) {
+      console.error("Error sending file:", error);
+    }
+  };
+  reader.readAsDataURL(file);
+};
+
   // -------------------------
   // UI handlers
   // -------------------------
   const handleConnect = async () => {
+    if (isConnectingRef.current) return;
+
     const name = inputName.trim();
     if (!name) {
       alert("Please enter your display name");
       return;
     }
+    if (!roomId.trim()) {
+      alert("Please enter a room ID");
+      return;
+    }
+    if (roomId !== params.roomId) {
+      navigate(`/${roomId}`, { replace: true });
+    }
+    isConnectingRef.current = true;
     setDisplayName(name);
     localStorage.setItem("userName", name);
     setAskForDisplayName(false);
@@ -658,6 +720,60 @@ const sendMessage = useCallback(() => {
       if (!res.stream) {
         alert("Unable to enable microphone. It may be blocked by another app or browser permission.");
       }
+    }
+  };
+
+  const handleToggleRecording = async () => {
+    if (isRecording) {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { preferCurrentTab: true },
+        audio: true
+      });
+      recordedChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          recordedChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        setIsRecording(false);
+        const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.style.display = "none";
+        a.href = url;
+        a.download = `Meeting_Recording_${new Date().getTime()}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, 100);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsRecording(true);
+
+      stream.getVideoTracks()[0].onended = () => {
+        if (mediaRecorder.state !== "inactive") {
+          mediaRecorder.stop();
+        }
+      };
+    } catch (err) {
+      console.error("Error starting recording:", err);
+      alert("Could not start recording. Please ensure screen sharing permissions are granted.");
     }
   };
 
@@ -719,9 +835,13 @@ const sendMessage = useCallback(() => {
               <Typography variant="h5" sx={{ mb: 1 }}>
                 Join Meeting
               </Typography>
-              <Typography variant="body2" sx={{ mb: 3 }}>
-                Room: {roomId}
-              </Typography>
+              <TextField
+                fullWidth
+                label="Room ID"
+                value={roomId}
+                onChange={(e) => setRoomId(e.target.value)}
+                sx={{ mb: 2 }}
+              />
               <TextField
                 fullWidth
                 label="Your name"
@@ -734,7 +854,7 @@ const sendMessage = useCallback(() => {
                 fullWidth
                 variant="contained"
                 onClick={handleConnect}
-                disabled={!inputName.trim()}
+                disabled={!inputName.trim() || !roomId.trim()}
               >
                 Join
               </Button>
@@ -1016,7 +1136,42 @@ const sendMessage = useCallback(() => {
                   },
                 }}
               >
-                {String(m.data)}
+                {(() => {
+                  try {
+                    const parsed = JSON.parse(m.data);
+                    if (parsed && parsed.type === "file") {
+                      const isImage = parsed.fileData.startsWith("data:image/");
+                      return (
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                          {parsed.text && <Typography variant="body2">{parsed.text}</Typography>}
+                          {isImage ? (
+                            <img src={parsed.fileData} alt={parsed.fileName} style={{ maxWidth: "100%", borderRadius: "8px", maxHeight: "200px", objectFit: "cover" }} />
+                          ) : (
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1, bgcolor: "rgba(0,0,0,0.2)", p: 1, borderRadius: 1 }}>
+                              <Typography variant="body2" noWrap sx={{ maxWidth: 150 }}>📎 {parsed.fileName}</Typography>
+                            </Box>
+                          )}
+                          <Button
+                            size="small"
+                            variant="contained"
+                            sx={{ alignSelf: "flex-start", fontSize: "0.7rem", bgcolor: m.isOwn ? "rgba(255,255,255,0.2)" : "rgba(102, 126, 234, 0.8)", color: "#fff" }}
+                            onClick={() => {
+                              const a = document.createElement("a");
+                              a.href = parsed.fileData;
+                              a.download = parsed.fileName;
+                              a.click();
+                            }}
+                          >
+                            Download
+                          </Button>
+                        </Box>
+                      );
+                    }
+                    return String(parsed.text || m.data);
+                  } catch (e) {
+                    return String(m.data);
+                  }
+                })()}
                 {m.isOwn && <span style={{ marginLeft: "8px" }}>✨</span>}
               </Box>
 
@@ -1077,6 +1232,10 @@ const sendMessage = useCallback(() => {
           },
         }}
       />
+      <input type="file" ref={fileInputRef} style={{ display: "none" }} onChange={handleFileUpload} />
+      <IconButton onClick={() => fileInputRef.current?.click()} sx={{ color: "#a78bfa" }}>
+        <AttachFileIcon />
+      </IconButton>
       <IconButton
         onClick={sendMessage}
         disabled={!message.trim()}
@@ -1133,6 +1292,14 @@ const sendMessage = useCallback(() => {
                 sx={{ bgcolor: audioOn ? "#667eea" : "#ef4444", color: "#fff" }}
               >
                 {audioOn ? <MicIcon /> : <MicOffIcon />}
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={isRecording ? "Stop recording" : "Record call"}>
+              <IconButton
+                onClick={handleToggleRecording}
+                sx={{ bgcolor: isRecording ? "#ef4444" : "#667eea", color: "#fff" }}
+              >
+                {isRecording ? <StopIcon /> : <FiberManualRecordIcon />}
               </IconButton>
             </Tooltip>
             {screenAvailable && (

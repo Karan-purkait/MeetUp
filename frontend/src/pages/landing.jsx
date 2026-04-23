@@ -38,6 +38,11 @@ const theme = createTheme({
 export default function LandingPage() {
   const navigate = useNavigate();
 
+  const handleJoinAsGuest = () => {
+    const randomRoom = Math.random().toString(36).substring(2, 10);
+    navigate(`/${randomRoom}`);
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <Box
@@ -157,7 +162,7 @@ export default function LandingPage() {
               }}
             >
               <Button
-                onClick={() => navigate('/aljk23')}
+                onClick={handleJoinAsGuest}
                 sx={{
                   color: '#667eea',
                   fontWeight: 600,
@@ -330,7 +335,7 @@ export default function LandingPage() {
                   </Button>
 
                   <Button
-                    onClick={() => navigate('/aljk23')}
+                    onClick={handleJoinAsGuest}
                     variant="outlined"
                     startIcon={<PlayArrowIcon />}
                     sx={{
@@ -623,7 +628,8 @@ export default function LandingPage() {
           }}
         >
           <Typography variant="body2">
-            © 2025 MeetUp. All rights reserved. Connect with love. 💜
+            © 2025 MeetUp. All rights reserved. Connect with love. 💜<br />
+            Made By Karan
           </Typography>
         </Box>
       </Box>

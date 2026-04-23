@@ -13,6 +13,7 @@ export const connectToSocket = (server) => {
       methods: ["GET", "POST"],
       credentials: true,
     },
+    maxHttpBufferSize: 1e8, // 100 MB for media sharing
   });
 
   // roomId -> Set<socketId>
@@ -74,7 +75,7 @@ export const connectToSocket = (server) => {
 
       // IMPORTANT: Emit as separate parameters matching frontend expectation
       // Parameters: (messageString, senderName, senderId)
-      io.to(roomId).emit("chat-message", cleanMessage, sender, senderSocketId);
+      socket.to(roomId).emit("chat-message", cleanMessage, sender, senderSocketId);
     });
 
     // -------------------------------------------------

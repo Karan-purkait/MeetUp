@@ -29,7 +29,6 @@ const userSchema = new Schema(
 );
 
 // OPTIONAL: ensure indexes are built (useful in dev/tests)
-userSchema.index({ email: 1 }, { unique: true });
 
 // Compile the model
 const User = mongoose.model('User', userSchema);
