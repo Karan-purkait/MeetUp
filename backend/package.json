@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "nodemon src/app.js"
+    "dev": "nodemon src/app.js",
+    "build": "echo \"Backend doesn't require a build step. Moving on...\""
   },
   "keywords": ["webrtc", "socket.io", "video", "conferencing"],
   "author": "Karan Purkait",

@@ -179,7 +179,7 @@ export default function VideoMeet() {
   }, [videos]);
 
   // add local tracks to a pc (safely)
-  const addLocalTracksToPc = (pc) => {
+  const addLocalTracksToPc = useCallback((pc) => {
     if (!window.localStream) return;
     const senders = pc.getSenders ? pc.getSenders() : [];
     window.localStream.getTracks().forEach((track) => {
@@ -196,7 +196,7 @@ export default function VideoMeet() {
         } catch (e) {}
       }
     });
-  };
+  }, []);
 
   // replace tracks in all connections when local stream changes
   const replaceTracksInConnections = (stream) => {
@@ -389,7 +389,7 @@ export default function VideoMeet() {
   // -------------------------
   // Peer Connection creation
   // -------------------------
-  const createPeerConnection = (remoteId, remoteName = "Guest") => {
+  const createPeerConnection = useCallback((remoteId, remoteName = "Guest") => {
     if (connectionsRef.current[remoteId]) return connectionsRef.current[remoteId];
 
     const pc = new RTCPeerConnection(peerConfigConnections);
@@ -440,7 +440,7 @@ export default function VideoMeet() {
     addLocalTracksToPc(pc);
 
     return pc;
-  };
+  }, [displayName, addLocalTracksToPc]);
 
   // -------------------------
   // Handle incoming signals (SDP/ICE)
@@ -481,7 +481,7 @@ export default function VideoMeet() {
         console.error("handleSignal", e);
       }
     },
-    [displayName]
+    [displayName, createPeerConnection, addLocalTracksToPc]
   );
 
   // -------------------------
@@ -584,7 +584,7 @@ const connectToSocketServer = useCallback(() => {
     connectionsRef.current = {};
     setVideos([]);
   });
-}, [roomId, displayName, handleSignal, showChat]);
+}, [roomId, displayName, handleSignal, showChat, createPeerConnection, addLocalTracksToPc]);
 
   // send chat
 // Replace the sendMessage function in VideoMeet.jsx with this fixed version
@@ -779,9 +779,10 @@ const handleFileUpload = (e) => {
 
   // cleanup when unmount
   useEffect(() => {
+    const videoElement = localVideoRef.current;
     return () => {
       try {
-        if (localVideoRef.current?.srcObject) localVideoRef.current.srcObject.getTracks().forEach(t => t.stop());
+        if (videoElement?.srcObject) videoElement.srcObject.getTracks().forEach(t => t.stop());
       } catch (e) {}
       Object.values(connectionsRef.current).forEach(pc => pc.close());
       connectionsRef.current = {};
@@ -935,8 +936,7 @@ const handleFileUpload = (e) => {
           </Box>
 
           {/* chat */}
-         {/* chat */}
-// Replace the chat section in VideoMeet.jsx with this enhanced version
+          {/* chat */}
 
 {/* ENHANCED CHAT */}
 {showChat && (
