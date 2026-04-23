@@ -75,7 +75,7 @@ export const connectToSocket = (server) => {
 
       // IMPORTANT: Emit as separate parameters matching frontend expectation
       // Parameters: (messageString, senderName, senderId)
-      socket.to(roomId).emit("chat-message", cleanMessage, sender, senderSocketId);
+      io.to(roomId).emit("chat-message", cleanMessage, sender, senderSocketId);
     });
 
     // -------------------------------------------------

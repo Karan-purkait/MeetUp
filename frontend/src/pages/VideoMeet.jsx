@@ -597,20 +597,7 @@ const sendMessage = useCallback(() => {
 
   try {
     const payload = JSON.stringify({ type: "text", text: message.trim() });
-    const msg = {
-      sender: displayName || "Guest",
-      data: payload,
-      timestamp: new Date().toLocaleTimeString(),
-      socketId: socketIdRef.current,
-      isOwn: true,
-    };
-
     socketRef.current.emit("chat-message", payload, displayName || "Guest", socketIdRef.current);
-
-    setMessages(prev => {
-      if (!Array.isArray(prev)) return [msg];
-      return [...prev, msg];
-    });
 
     setMessage("");
   } catch (error) {
@@ -638,20 +625,7 @@ const handleFileUpload = (e) => {
     });
 
     try {
-      const msg = {
-        sender: displayName || "Guest",
-        data: payload,
-        timestamp: new Date().toLocaleTimeString(),
-        socketId: socketIdRef.current,
-        isOwn: true,
-      };
-
       socketRef.current.emit("chat-message", payload, displayName || "Guest", socketIdRef.current);
-
-      setMessages(prev => {
-        if (!Array.isArray(prev)) return [msg];
-        return [...prev, msg];
-      });
 
       setMessage("");
       if (fileInputRef.current) fileInputRef.current.value = "";
