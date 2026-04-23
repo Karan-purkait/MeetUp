@@ -140,6 +140,7 @@ export default function VideoMeet() {
   }, []);
 
   const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [isSwapped, setIsSwapped] = useState(false);
 
   const handleCopyLink = () => {
     const url = window.location.origin + "/" + roomId;
@@ -927,18 +928,6 @@ const handleFileUpload = (e) => {
           ) : videos.length === 1 ? (
             // 1-on-1 Call Layout
             <Box sx={{ position: "absolute", inset: 0 }}>
-              {/* Remote Video */}
-              <video
-                autoPlay
-                playsInline
-                ref={(el) => setVideoRef(videos[0].socketId, el)}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                }}
-              />
-
               {/* Top Bar Overlay */}
               <Box
                 sx={{
@@ -952,7 +941,7 @@ const handleFileUpload = (e) => {
                   display: "flex",
                   alignItems: "flex-start",
                   justifyContent: "space-between",
-                  zIndex: 10,
+                  zIndex: 20, // Keep above everything
                 }}
               >
                 <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
@@ -971,20 +960,25 @@ const handleFileUpload = (e) => {
                 </IconButton>
               </Box>
 
-              {/* Local Video PIP */}
-              <Card
-                sx={{
+              {/* Local Video */}
+              <Box
+                onClick={() => isSwapped && setIsSwapped(false)}
+                sx={isSwapped ? {
+                  position: "absolute", inset: 0, zIndex: 1, cursor: "default"
+                } : {
                   position: "absolute",
-                  bottom: 120, // Right above the bottom controls
+                  bottom: { xs: 90, sm: 120 },
                   right: 16,
-                  width: 100,
-                  height: 150,
+                  width: { xs: 90, sm: 110 },
+                  height: { xs: 130, sm: 160 },
                   borderRadius: 3,
                   overflow: "hidden",
                   border: "2px solid rgba(255,255,255,0.2)",
                   boxShadow: "0 8px 16px rgba(0,0,0,0.5)",
                   zIndex: 10,
                   backgroundColor: "#333",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
                 }}
               >
                 <video
@@ -999,7 +993,40 @@ const handleFileUpload = (e) => {
                     transform: "scaleX(-1)", // Mirror effect
                   }}
                 />
-              </Card>
+              </Box>
+
+              {/* Remote Video */}
+              <Box
+                onClick={() => !isSwapped && setIsSwapped(true)}
+                sx={!isSwapped ? {
+                  position: "absolute", inset: 0, zIndex: 1, cursor: "default"
+                } : {
+                  position: "absolute",
+                  bottom: { xs: 90, sm: 120 },
+                  right: 16,
+                  width: { xs: 90, sm: 110 },
+                  height: { xs: 130, sm: 160 },
+                  borderRadius: 3,
+                  overflow: "hidden",
+                  border: "2px solid rgba(255,255,255,0.2)",
+                  boxShadow: "0 8px 16px rgba(0,0,0,0.5)",
+                  zIndex: 10,
+                  backgroundColor: "#333",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                <video
+                  autoPlay
+                  playsInline
+                  ref={(el) => setVideoRef(videos[0].socketId, el)}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  }}
+                />
+              </Box>
             </Box>
           ) : (
             // Group Call Layout (Grid)
@@ -1353,11 +1380,12 @@ const handleFileUpload = (e) => {
               bottom: 0,
               left: 0,
               right: 0,
-              pb: 4,
-              pt: 3,
+              pb: { xs: 2, sm: 4 },
+              pt: { xs: 2, sm: 3 },
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
+              flexWrap: "wrap",
               gap: { xs: 1, sm: 2 },
               background: "linear-gradient(to top, rgba(0,0,0,0.9), transparent)",
               zIndex: 10,
@@ -1370,13 +1398,13 @@ const handleFileUpload = (e) => {
                   bgcolor: "rgba(255,255,255,0.1)", 
                   color: "#fff",
                   backdropFilter: "blur(10px)",
-                  width: 50,
-                  height: 50,
+                  width: { xs: 40, sm: 50 },
+                  height: { xs: 40, sm: 50 },
                   transition: "all 0.2s",
                   "&:hover": { bgcolor: "rgba(255,255,255,0.3)" }
                 }}
               >
-                <ContentCopyIcon />
+                <ContentCopyIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
               </IconButton>
             </Tooltip>
 
@@ -1388,13 +1416,13 @@ const handleFileUpload = (e) => {
                     bgcolor: screenOn ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)", 
                     color: screenOn ? "#4ade80" : "#fff",
                     backdropFilter: "blur(10px)",
-                    width: 50,
-                    height: 50,
+                    width: { xs: 40, sm: 50 },
+                    height: { xs: 40, sm: 50 },
                     transition: "all 0.2s",
                     "&:hover": { bgcolor: "rgba(255,255,255,0.3)" }
                   }}
                 >
-                  {screenOn ? <StopScreenShareIcon /> : <ScreenShareIcon />}
+                  {screenOn ? <StopScreenShareIcon sx={{ fontSize: { xs: 20, sm: 24 } }} /> : <ScreenShareIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />}
                 </IconButton>
               </Tooltip>
             )}
@@ -1406,13 +1434,13 @@ const handleFileUpload = (e) => {
                   bgcolor: videoOn ? "rgba(255,255,255,0.1)" : "#ef4444", 
                   color: "#fff",
                   backdropFilter: "blur(10px)",
-                  width: 50,
-                  height: 50,
+                  width: { xs: 40, sm: 50 },
+                  height: { xs: 40, sm: 50 },
                   transition: "all 0.2s",
                   "&:hover": { bgcolor: videoOn ? "rgba(255,255,255,0.3)" : "#dc2626" }
                 }}
               >
-                {videoOn ? <VideocamIcon /> : <VideocamOffIcon />}
+                {videoOn ? <VideocamIcon sx={{ fontSize: { xs: 20, sm: 24 } }} /> : <VideocamOffIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />}
               </IconButton>
             </Tooltip>
 
@@ -1423,13 +1451,13 @@ const handleFileUpload = (e) => {
                   bgcolor: audioOn ? "rgba(255,255,255,0.1)" : "#ef4444", 
                   color: "#fff",
                   backdropFilter: "blur(10px)",
-                  width: 50,
-                  height: 50,
+                  width: { xs: 40, sm: 50 },
+                  height: { xs: 40, sm: 50 },
                   transition: "all 0.2s",
                   "&:hover": { bgcolor: audioOn ? "rgba(255,255,255,0.3)" : "#dc2626" }
                 }}
               >
-                {audioOn ? <MicIcon /> : <MicOffIcon />}
+                {audioOn ? <MicIcon sx={{ fontSize: { xs: 20, sm: 24 } }} /> : <MicOffIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />}
               </IconButton>
             </Tooltip>
 
@@ -1440,13 +1468,13 @@ const handleFileUpload = (e) => {
                   bgcolor: isRecording ? "#ef4444" : "rgba(255,255,255,0.1)", 
                   color: "#fff",
                   backdropFilter: "blur(10px)",
-                  width: 50,
-                  height: 50,
+                  width: { xs: 40, sm: 50 },
+                  height: { xs: 40, sm: 50 },
                   transition: "all 0.2s",
                   "&:hover": { bgcolor: isRecording ? "#dc2626" : "rgba(255,255,255,0.3)" }
                 }}
               >
-                {isRecording ? <StopIcon /> : <FiberManualRecordIcon />}
+                {isRecording ? <StopIcon sx={{ fontSize: { xs: 20, sm: 24 } }} /> : <FiberManualRecordIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />}
               </IconButton>
             </Tooltip>
 
@@ -1461,13 +1489,13 @@ const handleFileUpload = (e) => {
                     bgcolor: "rgba(255,255,255,0.1)", 
                     color: "#fff",
                     backdropFilter: "blur(10px)",
-                    width: 50,
-                    height: 50,
+                    width: { xs: 40, sm: 50 },
+                    height: { xs: 40, sm: 50 },
                     transition: "all 0.2s",
                     "&:hover": { bgcolor: "rgba(255,255,255,0.3)" }
                   }}
                 >
-                  <ChatIcon />
+                  <ChatIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
                 </IconButton>
               </Badge>
             </Tooltip>
@@ -1479,15 +1507,15 @@ const handleFileUpload = (e) => {
                 sx={{ 
                   bgcolor: "#ef4444", 
                   color: "#fff",
-                  width: 64,
-                  height: 64,
-                  ml: { xs: 0, sm: 2 }, // Add margin on larger screens
+                  width: { xs: 50, sm: 64 },
+                  height: { xs: 50, sm: 64 },
+                  ml: { xs: 0, sm: 2 },
                   boxShadow: "0 4px 12px rgba(239, 68, 68, 0.4)",
                   "&:hover": { bgcolor: "#dc2626", transform: "scale(1.05)" },
                   transition: "all 0.2s"
                 }}
               >
-                <CallEndIcon sx={{ fontSize: 32 }} />
+                <CallEndIcon sx={{ fontSize: { xs: 28, sm: 32 } }} />
               </IconButton>
             </Tooltip>
           </Box>
