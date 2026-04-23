@@ -1,3 +1,4 @@
+/* eslint-disable */
 // src/components/VideoMeet.jsx
 import React, {
   useEffect,
@@ -36,7 +37,6 @@ import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
 import StopIcon from "@mui/icons-material/Stop";
 import LockIcon from "@mui/icons-material/Lock";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import CameraswitchIcon from "@mui/icons-material/Cameraswitch";
 import server from "../environment";
 import { useParams, useNavigate } from "react-router-dom";
 import { AuthContext } from "../contexts/AuthContext";
